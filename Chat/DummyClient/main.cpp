@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <mswsock.h>
 #include <thread>
+#include <string>
 #include "Packet.h"
 #include "Define.h"
 
