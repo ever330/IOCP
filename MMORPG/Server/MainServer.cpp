@@ -90,7 +90,7 @@ void MainServer::PacketProcess(unsigned int userID, PacketBase* pac)
 		case C2SSetName:
 			C2SSetNamePacket setName;
 			memcpy(&setName, pac->Body, pac->PacketSize - sizeof(PacketBase));
-			std::cout << "이름 설정 : " << setName.Name << std::endl;
+			std::cout <<"이름 설정 : " << setName.Name << std::endl;
 
 			newUser = new User(userID, setName.Name);
 

@@ -13,21 +13,42 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="IOCP">
+      <UniqueIdentifier>{f703e5ca-112f-4fa4-b565-65483e73cb5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MainServer">
+      <UniqueIdentifier>{cd486473-5a69-49bc-ad4b-ca775c1c53b5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="IOCP.cpp">
+      <Filter>IOCP</Filter>
+    </ClCompile>
+    <ClCompile Include="MainServer.cpp">
+      <Filter>MainServer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Packet.h">
+    <ClInclude Include="User.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Define.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="RingBuffer.h">
+    <ClInclude Include="pch.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Packet.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="IOCP.h">
+      <Filter>IOCP</Filter>
+    </ClInclude>
+    <ClInclude Include="MainServer.h">
+      <Filter>MainServer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
