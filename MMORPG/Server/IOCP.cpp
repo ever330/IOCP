@@ -1,5 +1,6 @@
 #include "IOCP.h"
 #include "MainServer.h"
+#include "Packet.h"
 
 void IOCP::Initialize()
 {
@@ -13,7 +14,7 @@ void IOCP::Initialize()
 
 	SOCKET listenSocket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 
-	if (listenSocket == INVALID_SOCKET) 
+	if (listenSocket == INVALID_SOCKET)
 	{
 		std::cerr << "서버 소켓 생성 실패: " << WSAGetLastError() << std::endl;
 		closesocket(listenSocket);
@@ -32,7 +33,7 @@ void IOCP::Initialize()
 	// IOCP 생성
 	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
-	if (m_hIocp == NULL) 
+	if (m_hIocp == NULL)
 	{
 		std::cerr << "CreateIoCompletionPort failed with error: " << WSAGetLastError() << std::endl;
 		WSACleanup();
@@ -55,7 +56,7 @@ void IOCP::Initialize()
 	}
 
 	// Worker Thread 생성
-	for (int i = 0; i < _Thrd_hardware_concurrency(); ++i)
+	for (int i = 0; i < _Thrd_hardware_concurrency() - CONTENTS_THREAD; ++i)
 	{
 		m_workerThreads.emplace_back(std::thread(&IOCP::WorkerThread, this));
 	}
@@ -76,7 +77,7 @@ void IOCP::Initialize()
 		&lpfnAcceptEx, sizeof(lpfnAcceptEx),
 		&dwBytes, NULL, NULL);
 
-	if (result == SOCKET_ERROR) 
+	if (result == SOCKET_ERROR)
 	{
 		std::cerr << "WSAIoctl 실패: " << WSAGetLastError() << std::endl;
 		closesocket(listenSocket);
@@ -113,7 +114,21 @@ void IOCP::Finalize()
 
 void IOCP::SendPacket(unsigned int sessionID, char* packet, int byteLength)
 {
-	
+	auto it = m_sessions.find(sessionID);
+	if (it != m_sessions.end())
+	{
+		IOData* writeIoData = new IOData;
+		memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
+		writeIoData->wsaBuf.buf = packet;
+		writeIoData->wsaBuf.len = byteLength;
+		writeIoData->mode = WRITE;
+		DWORD bytesSent;
+		WSASend(it->second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
+	}
+	else
+	{
+		std::cerr << "세션 ID를 찾을 수 없습니다: " << sessionID << std::endl;
+	}
 }
 
 void IOCP::BroadCast(char* packet, int byteLength)
@@ -130,11 +145,24 @@ void IOCP::BroadCast(char* packet, int byteLength)
 	}
 }
 
+void IOCP::UpdateHeartBeatTime(unsigned int sessionID)
+{
+	auto it = m_sessions.find(sessionID);
+	if (it != m_sessions.end())
+	{
+		it->second->lastHeartbeatTime = std::chrono::steady_clock::now();
+	}
+	else
+	{
+		std::cerr << "세션 ID를 찾을 수 없습니다: " << sessionID << std::endl;
+	}
+}
+
 bool IOCP::PostAccept(IOData* ioData)
 {
 	SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
-	if (clientSocket == INVALID_SOCKET) 
+	if (clientSocket == INVALID_SOCKET)
 	{
 		std::cerr << "클라이언트 소켓 생성 실패: " << WSAGetLastError() << std::endl;
 		return false;
@@ -155,11 +183,11 @@ bool IOCP::PostAccept(IOData* ioData)
 		LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
 		&dwBytes, &(ioData->overlapped));
 
-	if (!result) 
+	if (!result)
 	{
 		int error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) // WSA_IO_PENDING(997)이 아니면 실패 처리
-		{  
+		{
 			std::cerr << "AcceptEx 실패: " << error << std::endl;
 			closesocket(clientSocket);
 			delete client;
@@ -182,7 +210,7 @@ bool IOCP::PostRecv(Session* session, IOData* ioData)
 	DWORD bytesReceived;
 	int result = WSARecv(session->socket, &ioData->wsaBuf, 1, &bytesReceived, &flags, &ioData->overlapped, NULL);
 
-	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) 
+	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		closesocket(session->socket);
 		delete session;
@@ -192,31 +220,79 @@ bool IOCP::PostRecv(Session* session, IOData* ioData)
 	return true;
 }
 
-void IOCP::EraseSession(unsigned int index)
+void IOCP::EraseSession(unsigned int sessionID)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
-	auto it = m_sessions.find(index);
+	auto it = m_sessions.find(sessionID);
 	if (it != m_sessions.end())
 	{
 		closesocket(it->second->socket);
 		delete it->second;
 		m_sessions.erase(it);
 
+		MainServer::Instance().DisconnectClient(sessionID);
 		// 세션 ID 재사용을 위해 큐에 추가
-		m_availableSessionIDs.push(index);
+		//m_availableSessionIDs.push(sessionID);
 	}
 }
 
 unsigned int IOCP::GenerateSessionID()
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
+	/*std::lock_guard<std::mutex> lock(m_mutex);
+	std::cout << "Before check: empty = " << m_availableSessionIDs.empty() << std::endl;
 	if (!m_availableSessionIDs.empty())
 	{
 		unsigned int reusedID = m_availableSessionIDs.front();
 		m_availableSessionIDs.pop();
 		return reusedID;
-	}
+	}*/
 	return m_nextSessionID++;
+}
+
+void IOCP::HeartBeatThread()
+{
+	while (true)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(HEARTBEAT_INTERVAL_MS));
+
+		auto now = std::chrono::steady_clock::now();
+
+		std::lock_guard<std::mutex> lock(m_mutex); // 세션 접근 동기화  
+
+		for (auto& sessionPair : m_sessions)
+		{
+			unsigned int sessionID = sessionPair.first;
+			Session* session = sessionPair.second;
+
+			// 타임아웃 체크  
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - session->lastHeartbeatTime);
+			if (duration.count() > TIMEOUT_MS)
+			{
+				// 응답 없음: 연결 종료 처리  
+				EraseSession(sessionID);
+				continue;
+			}
+
+			// 하트비트 패킷 전송  
+			SendHeartBeat(sessionID);
+		}
+	}
+}
+
+void IOCP::SendHeartBeat(unsigned int sessionID)
+{
+	int packetSize = sizeof(PacketBase);
+
+	// 패킷 메모리 할당
+	char* buffer = new char[packetSize];
+
+	// 패킷 생성
+	PacketBase* packet = reinterpret_cast<PacketBase*>(buffer);
+	packet->PacketSize = packetSize;
+	packet->PacID = PacketID::S2CHeartBeat;
+
+	// 패킷 전송
+	SendPacket(sessionID, buffer, packetSize);
 }
 
 void IOCP::WorkerThread()
@@ -239,9 +315,9 @@ void IOCP::WorkerThread()
 		if (!success || (bytesTransferred == 0 && ioData->mode != ACCEPT))
 		{
 			std::cout << "클라이언트 연결 종료" << std::endl;
-			if (session) 
+			if (session)
 			{
-				EraseSession(session->sessionIndex);
+				EraseSession(session->sessionID);
 			}
 			continue;
 		}
@@ -251,7 +327,8 @@ void IOCP::WorkerThread()
 			Session* curSession = ioData->session;
 
 			unsigned int sessionID = GenerateSessionID();
-			curSession->sessionIndex = sessionID;
+			curSession->sessionID = sessionID;
+			curSession->lastHeartbeatTime = std::chrono::steady_clock::now();
 
 			setsockopt(curSession->socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, (char*)&m_serverSession->socket, sizeof(m_serverSession->socket));
 
@@ -263,7 +340,7 @@ void IOCP::WorkerThread()
 
 			char szip[16] = { 0 };
 
-			if (InetNtopA(AF_INET, &(&curSockAddrIn)->sin_addr, szip, INET_ADDRSTRLEN) == NULL) 
+			if (InetNtopA(AF_INET, &(&curSockAddrIn)->sin_addr, szip, INET_ADDRSTRLEN) == NULL)
 			{
 				std::cerr << "IP 변환 실패" << std::endl;
 				return;
@@ -279,7 +356,7 @@ void IOCP::WorkerThread()
 			memset(&newIoData->overlapped, 0, sizeof(OVERLAPPED));
 			newIoData->mode = READ;
 			bool recvResult = PostRecv(curSession, newIoData);
-			if (!recvResult) 
+			if (!recvResult)
 			{
 				std::cerr << "PostRecv() 실패!" << std::endl;
 				delete newIoData;
@@ -290,7 +367,7 @@ void IOCP::WorkerThread()
 
 			// 다음 클라이언트의 연결 요청을 받기 위해 PostAccept() 호출
 			bool postResult = PostAccept(ioData);
-			if (!postResult) 
+			if (!postResult)
 			{
 				std::cerr << "PostAccept() 실패!" << std::endl;
 				delete ioData;
@@ -302,10 +379,10 @@ void IOCP::WorkerThread()
 			ioData->wsaBuf.len = bytesTransferred;
 			ioData->mode = READ;
 
-			MainServer::Instance().PushData(session->sessionIndex, ioData->buffer);
+			MainServer::Instance().PushData(session->sessionID, ioData->buffer);
 
 			bool recvResult = PostRecv(session, ioData);
-			if (!recvResult) 
+			if (!recvResult)
 			{
 				std::cerr << "PostRecv() 실패!" << std::endl;
 				delete ioData;

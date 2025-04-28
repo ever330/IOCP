@@ -7,6 +7,7 @@
 #include <vector>
 #include <list>
 #include <queue>
+#include <deque>
 #include <map>
 #include <sstream>
 #include <ctime>
@@ -14,6 +15,8 @@
 #include <time.h>
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
+#include <random>
 
 // Socket
 #include <winsock2.h>

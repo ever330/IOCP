@@ -7,7 +7,8 @@ struct Session
 {
     SOCKET socket;
     SOCKADDR_IN sockAddr;
-    int sessionIndex;
+    int sessionID;
+    std::chrono::steady_clock::time_point lastHeartbeatTime;
 };
 
 struct IOData
@@ -27,13 +28,16 @@ public:
     void Finalize();
     void SendPacket(unsigned int sessionID, char* packet, int byteLength);
     void BroadCast(char* packet, int byteLength);
+    void UpdateHeartBeatTime(unsigned int sessionID);
 
 private:
     void WorkerThread();
     bool PostAccept(IOData* ioData);
     bool PostRecv(Session* session, IOData* ioData);
-    void EraseSession(unsigned int index);
+    void EraseSession(unsigned int sessionID);
     unsigned int GenerateSessionID();
+	void HeartBeatThread();
+	void SendHeartBeat(unsigned int sessionID);
 
 private:
     HANDLE m_hIocp;
