@@ -158,7 +158,7 @@ struct S2CPlayerMovePacket
 
 struct C2SPlayerAttackPacket
 {
-	uint8_t AttackDirection;
+	uint8_t AttackDirection; 
 };
 
 struct S2CPlayerAttackPacket

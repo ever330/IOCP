@@ -19,6 +19,7 @@ public:
 	unsigned int GetCurHp() const;
 	Vector3 GetPosition() const;
 	uint8_t GetDirection() const;
+	void Move(int dir);
 
 private:
 	unsigned int m_maxHP;

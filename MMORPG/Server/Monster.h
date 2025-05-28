@@ -1,7 +1,10 @@
 #pragma once
 
 #include "pch.h"
+#include "Util.h"
 #include "Vector3.h"
+
+class User;
 
 class Monster
 {
@@ -10,8 +13,8 @@ public:
 	~Monster();
 
 public:
-	void Update();
-	void TakeDamage(int damage);
+	void Update(const std::unordered_set<unsigned int> mapUsers);
+	void TakeDamage(Direction dir, int damage, int knockbackDistance);
 	void Respawn(Vector3 spawnPos);
 
 	bool IsDead() const;
@@ -19,13 +22,18 @@ public:
 	unsigned int GetMaxHp() const;
 	unsigned int GetCurHp() const;
 	Vector3 GetPosition() const;
-	uint8_t GetDirection() const;
+
+private:
+	std::shared_ptr<User> FindClosetUser(const std::unordered_set<unsigned int> mapUsers);
+	void FreeWalk();
 
 private:
 	int m_id;
 	int m_maxHP;
 	int m_curHP;
 	Vector3 m_position;
-	uint8_t m_direction;	// 0 : ¿ÞÂÊ, 1 : ¿À¸¥ÂÊ
+	
+	const int m_speed = 5;
+	const int m_detectRange = 100;
 };
 

@@ -15,10 +15,16 @@ struct IOData
 {
     OVERLAPPED overlapped;
     WSABUF wsaBuf;
-    char buffer[BUFFER_SIZE];
     int mode;
 
-    Session* session;
+    std::shared_ptr<char[]> packetMemory;
+    Session* session = nullptr;
+    int sessionID;
+
+    char* GetBuffer()
+    {
+        return packetMemory.get();
+    }
 };
 
 class IOCP
@@ -26,14 +32,14 @@ class IOCP
 public:
     void Initialize();
     void Finalize();
-    void SendPacket(unsigned int sessionID, char* packet, int byteLength);
-    void BroadCast(char* packet, int byteLength);
+    void SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, int byteLength);
+    void BroadCast(std::shared_ptr<char[]> packet, int byteLength);
     void UpdateHeartBeatTime(unsigned int sessionID);
 
 private:
     void WorkerThread();
-    bool PostAccept(IOData* ioData);
-    bool PostRecv(Session* session, IOData* ioData);
+    bool PostAccept(std::shared_ptr<IOData> ioData);
+    bool PostRecv(Session* session, std::shared_ptr<IOData> ioData);
     void EraseSession(unsigned int sessionID);
     unsigned int GenerateSessionID();
 	void HeartBeatThread();
@@ -47,7 +53,10 @@ private:
     unsigned int m_nextSessionID;
     std::queue<unsigned int> m_availableSessionIDs;
 
+    std::unordered_map<OVERLAPPED*, std::shared_ptr<IOData>> m_ioDataMap;
+
     std::mutex m_mutex;
+	std::mutex m_ioMapMutex;
 
     LPFN_ACCEPTEX lpfnAcceptEx;
     GUID GuidAcceptEx;

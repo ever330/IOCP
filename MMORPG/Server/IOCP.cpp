@@ -87,9 +87,18 @@ void IOCP::Initialize()
 
 	m_nextSessionID = 1;
 
-	IOData* ioData = new IOData;
+	std::shared_ptr<IOData> ioData = std::make_shared<IOData>();
 	memset(&ioData->overlapped, 0, sizeof(OVERLAPPED));
 	ioData->mode = ACCEPT;
+	ioData->packetMemory = std::shared_ptr<char[]>(new char[LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16]);
+	ioData->wsaBuf.buf = ioData->packetMemory.get();
+	ioData->wsaBuf.len = LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16;
+
+	{
+		std::lock_guard<std::mutex> lock(m_ioMapMutex);
+		m_ioDataMap[&ioData->overlapped] = ioData;
+	}
+
 	bool postResult = PostAccept(ioData);
 
 	if (!postResult)
@@ -100,6 +109,15 @@ void IOCP::Initialize()
 
 void IOCP::Finalize()
 {
+	for (auto& thread : m_workerThreads)
+		PostQueuedCompletionStatus(m_hIocp, 0, 0, nullptr);
+
+	for (auto& thread : m_workerThreads)
+		thread.join();
+
+	if (m_hIocp)
+		CloseHandle(m_hIocp);
+
 	for (auto& session : m_sessions)
 	{
 		closesocket(session.second->socket);
@@ -108,40 +126,72 @@ void IOCP::Finalize()
 
 	closesocket(m_serverSession->socket);
 	delete m_serverSession;
-
-	CloseHandle(m_hIocp);
 }
 
-void IOCP::SendPacket(unsigned int sessionID, char* packet, int byteLength)
+void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, int byteLength)
 {
 	auto it = m_sessions.find(sessionID);
-	if (it != m_sessions.end())
-	{
-		IOData* writeIoData = new IOData;
-		memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
-		writeIoData->wsaBuf.buf = packet;
-		writeIoData->wsaBuf.len = byteLength;
-		writeIoData->mode = WRITE;
-		DWORD bytesSent;
-		WSASend(it->second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
-	}
-	else
+	if (it == m_sessions.end())
 	{
 		std::cerr << "세션 ID를 찾을 수 없습니다: " << sessionID << std::endl;
+		return;
 	}
+
+	std::shared_ptr<IOData> writeIoData = std::make_shared<IOData>();
+	memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
+	std::shared_ptr<char[]> buffer(new char[byteLength]);
+	memcpy(buffer.get(), packet.get(), byteLength);
+	writeIoData->packetMemory = buffer;
+	writeIoData->wsaBuf.buf = writeIoData->GetBuffer();
+	writeIoData->wsaBuf.len = byteLength;
+	writeIoData->mode = WRITE;
+
+	{
+		std::lock_guard<std::mutex> lock(m_ioMapMutex);
+		m_ioDataMap[&writeIoData->overlapped] = writeIoData;
+	}
+
+	DWORD bytesSent = 0;
+	int result = WSASend(it->second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
+	if (result == SOCKET_ERROR)
+	{
+		int error = WSAGetLastError();
+		if (error != WSA_IO_PENDING)
+		{
+			std::cerr << "WSASend 실패, error: " << error << std::endl;
+			return;
+		}
+	}
+	return;
 }
 
-void IOCP::BroadCast(char* packet, int byteLength)
+void IOCP::BroadCast(std::shared_ptr<char[]> packet, int byteLength)
 {
 	for (auto& session : m_sessions)
 	{
-		IOData* writeIoData = new IOData;
+		std::shared_ptr<IOData> writeIoData = std::make_shared<IOData>();
 		memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
-		writeIoData->wsaBuf.buf = packet;
+		writeIoData->packetMemory = std::shared_ptr<char[]>(new char[byteLength]);
+		writeIoData->packetMemory = packet;
+		writeIoData->wsaBuf.buf = writeIoData->GetBuffer();
 		writeIoData->wsaBuf.len = byteLength;
 		writeIoData->mode = WRITE;
+
+		{
+			std::lock_guard<std::mutex> lock(m_ioMapMutex);
+			m_ioDataMap[&writeIoData->overlapped] = writeIoData;
+		}
+
 		DWORD bytesSent;
-		WSASend(session.second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
+		if (session.second->socket != INVALID_SOCKET)
+		{
+			WSASend(session.second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
+		}
+		else
+		{
+			std::cerr << "세션 소켓이 유효하지 않습니다: " << session.first << std::endl;
+			EraseSession(session.first);
+		}
 	}
 }
 
@@ -158,7 +208,7 @@ void IOCP::UpdateHeartBeatTime(unsigned int sessionID)
 	}
 }
 
-bool IOCP::PostAccept(IOData* ioData)
+bool IOCP::PostAccept(std::shared_ptr<IOData> ioData)
 {
 	SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
@@ -178,7 +228,7 @@ bool IOCP::PostAccept(IOData* ioData)
 
 	DWORD dwBytes;
 
-	bool result = lpfnAcceptEx(m_serverSession->socket, client->socket, ioData->buffer,
+	bool result = lpfnAcceptEx(m_serverSession->socket, client->socket, ioData->GetBuffer(),
 		0,
 		LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
 		&dwBytes, &(ioData->overlapped));
@@ -199,10 +249,10 @@ bool IOCP::PostAccept(IOData* ioData)
 	return true;
 }
 
-bool IOCP::PostRecv(Session* session, IOData* ioData)
+bool IOCP::PostRecv(Session* session, std::shared_ptr<IOData> ioData)
 {
 	memset(&ioData->overlapped, 0, sizeof(OVERLAPPED));
-	ioData->wsaBuf.buf = ioData->buffer;
+	ioData->wsaBuf.buf = ioData->GetBuffer();
 	ioData->wsaBuf.len = BUFFER_SIZE;
 	ioData->mode = READ;
 
@@ -214,6 +264,7 @@ bool IOCP::PostRecv(Session* session, IOData* ioData)
 	{
 		closesocket(session->socket);
 		delete session;
+		m_ioDataMap.erase(&ioData->overlapped);
 
 		return false;
 	}
@@ -223,6 +274,15 @@ bool IOCP::PostRecv(Session* session, IOData* ioData)
 void IOCP::EraseSession(unsigned int sessionID)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
+
+	for (auto it = m_ioDataMap.begin(); it != m_ioDataMap.end();)
+	{
+		if (it->second->sessionID == sessionID)
+			it = m_ioDataMap.erase(it);
+		else
+			++it;
+	}
+
 	auto it = m_sessions.find(sessionID);
 	if (it != m_sessions.end())
 	{
@@ -284,10 +344,10 @@ void IOCP::SendHeartBeat(unsigned int sessionID)
 	int packetSize = sizeof(PacketBase);
 
 	// 패킷 메모리 할당
-	char* buffer = new char[packetSize];
+	std::shared_ptr<char[]> buffer(new char[packetSize]);
 
 	// 패킷 생성
-	PacketBase* packet = reinterpret_cast<PacketBase*>(buffer);
+	PacketBase* packet = reinterpret_cast<PacketBase*>(buffer.get());
 	packet->PacketSize = packetSize;
 	packet->PacID = PacketID::S2CHeartBeat;
 
@@ -299,7 +359,7 @@ void IOCP::WorkerThread()
 {
 	DWORD bytesTransferred;
 	Session* session;
-	IOData* ioData;
+	OVERLAPPED* overlapped;
 	DWORD flags = 0;
 
 	while (true)
@@ -308,9 +368,19 @@ void IOCP::WorkerThread()
 			m_hIocp,
 			&bytesTransferred,
 			(PULONG_PTR)&session,
-			(LPOVERLAPPED*)&ioData,
+			&overlapped,
 			INFINITE
 		);
+
+		std::shared_ptr<IOData> ioData;
+		{
+			std::lock_guard<std::mutex> lock(m_ioMapMutex);
+			auto it = m_ioDataMap.find(overlapped);
+			if (it != m_ioDataMap.end()) {
+				ioData = it->second;
+				m_ioDataMap.erase(it);  // 처리 완료 후 제거
+			}
+		}
 
 		if (!success || (bytesTransferred == 0 && ioData->mode != ACCEPT))
 		{
@@ -338,7 +408,7 @@ void IOCP::WorkerThread()
 
 			getpeername(curSession->socket, (struct sockaddr*)&curSockAddrIn, &size);
 
-			char szip[16] = { 0 };
+			char szip[64] = { 0 };
 
 			if (InetNtopA(AF_INET, &(&curSockAddrIn)->sin_addr, szip, INET_ADDRSTRLEN) == NULL)
 			{
@@ -352,25 +422,33 @@ void IOCP::WorkerThread()
 
 			m_sessions[sessionID] = curSession;
 
-			IOData* newIoData = new IOData;
+			std::shared_ptr<IOData> newIoData = std::make_shared<IOData>();
 			memset(&newIoData->overlapped, 0, sizeof(OVERLAPPED));
 			newIoData->mode = READ;
+			newIoData->packetMemory = std::shared_ptr<char[]>(new char[LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16]);
+			newIoData->wsaBuf.buf = ioData->packetMemory.get();
+			newIoData->wsaBuf.len = LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16;
+
+			{
+				std::lock_guard<std::mutex> lock(m_ioMapMutex);
+				m_ioDataMap[&newIoData->overlapped] = newIoData;
+			}
+
 			bool recvResult = PostRecv(curSession, newIoData);
 			if (!recvResult)
 			{
 				std::cerr << "PostRecv() 실패!" << std::endl;
-				delete newIoData;
 				delete curSession;
 				m_sessions.erase(sessionID);
 				break;
 			}
 
 			// 다음 클라이언트의 연결 요청을 받기 위해 PostAccept() 호출
+			m_ioDataMap[&ioData->overlapped] = ioData;
 			bool postResult = PostAccept(ioData);
 			if (!postResult)
 			{
 				std::cerr << "PostAccept() 실패!" << std::endl;
-				delete ioData;
 				break;
 			}
 		}
@@ -379,19 +457,19 @@ void IOCP::WorkerThread()
 			ioData->wsaBuf.len = bytesTransferred;
 			ioData->mode = READ;
 
-			MainServer::Instance().PushData(session->sessionID, ioData->buffer);
+			MainServer::Instance().PushData(session->sessionID, ioData->GetBuffer());
 
+			m_ioDataMap[&ioData->overlapped] = ioData;
 			bool recvResult = PostRecv(session, ioData);
 			if (!recvResult)
 			{
 				std::cerr << "PostRecv() 실패!" << std::endl;
-				delete ioData;
 				break;
 			}
 		}
 		else if (ioData->mode == WRITE)
 		{
-			delete ioData;
+
 		}
 	}
 }

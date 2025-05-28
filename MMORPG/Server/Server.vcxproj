@@ -104,6 +104,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,22 +129,32 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Character.cpp" />
+    <ClCompile Include="ChatPacketHandler.cpp" />
     <ClCompile Include="IOCP.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainServer.cpp" />
     <ClCompile Include="Map.cpp" />
+    <ClCompile Include="MapPacketHandler.cpp" />
     <ClCompile Include="Monster.cpp" />
+    <ClCompile Include="PacketDispatcher.cpp" />
+    <ClCompile Include="User.cpp" />
+    <ClCompile Include="UserPacketHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Character.h" />
+    <ClInclude Include="ChatPacketHandler.h" />
     <ClInclude Include="Define.h" />
     <ClInclude Include="IOCP.h" />
     <ClInclude Include="MainServer.h" />
     <ClInclude Include="Map.h" />
+    <ClInclude Include="MapPacketHandler.h" />
     <ClInclude Include="Monster.h" />
     <ClInclude Include="Packet.h" />
+    <ClInclude Include="IPacketHandler.h" />
+    <ClInclude Include="PacketDispatcher.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="User.h" />
+    <ClInclude Include="UserPacketHandler.h" />
     <ClInclude Include="Util.h" />
     <ClInclude Include="Vector3.h" />
   </ItemGroup>

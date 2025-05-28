@@ -1,7 +1,8 @@
 #pragma once
 
 #include "pch.h"
-#include "Vector3.h"
+#include "Util.h"
+#include "Packet.h"
 
 class User;
 class Monster;
@@ -16,16 +17,19 @@ public:
 public:
 	void Update();
 
-	void AddUser(unsigned int userID);
-	void RemoveUser(unsigned int userID);
+	void AddUser(std::shared_ptr<User> user);
+	void RemoveUser(std::shared_ptr<User> user);
 
 	unsigned int GetID() const;
 	Vector3 GetUserSpawnPos() const;
 	std::unordered_set<unsigned int> GetUsers() const;
 
+	void PlayerAttack(std::shared_ptr<User> user, C2SPlayerAttackPacket pac);
+
 private:
 	void SpawnMonster();
 	void MonsterStateUpdate();
+	void PlayerStateUpdate();
 
 private:
 	unsigned int m_id;
@@ -35,4 +39,6 @@ private:
 	Vector3 m_userSpawnPos;
 
 	int m_responseCount;
+
+	std::mutex m_mutex;
 };

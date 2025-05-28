@@ -1,5 +1,7 @@
 #pragma once
 
+#include "pch.h"
+
 struct Vector3
 {
 	float x = 0.0f;
