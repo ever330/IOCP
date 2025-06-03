@@ -7,8 +7,7 @@
 Map::Map(int id, std::shared_ptr<IOCP> iocp)
 	: m_id(id), m_IOCP(iocp), m_responseCount(0)
 {
-	// 몬스터 수 임시로 5마리 생성.
-	for (int i = 1; i <= 5; ++i)
+	for (int i = 1; i <= m_monsterSpawnCount; ++i)
 	{
 		// 임시 스폰 위치. Map 관련 DB가 있을 경우, 각 맵 별로 몬스터 스폰위치가 정해져야 함
 		Vector3 spawnPos = { GetRandomFloat(0.0f, MAP_MAX_X), GetRandomFloat(0.0f, MAP_MAX_Y), 0.0f };

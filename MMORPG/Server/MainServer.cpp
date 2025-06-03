@@ -18,6 +18,8 @@ bool MainServer::StartServer()
 	m_isRunning = true;
 	m_packetThread = std::thread(&MainServer::PacketWorker, this);
 
+	m_outputThread = std::thread(&MainServer::OutputServerMessages, this);
+
 	m_maps.emplace(1001, std::make_shared<Map>(1001, m_IOCP));
 	m_maps.emplace(1002, std::make_shared<Map>(1002, m_IOCP));
 	m_maps.emplace(1003, std::make_shared<Map>(1003, m_IOCP));
@@ -58,9 +60,7 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 	memcpy(pac, data, packetSize);
 
 	// 디버깅 출력
-	std::cout << "SessionID : " << sessionID
-		<< "\n 받은 패킷 크기: " << pac->PacketSize
-		<< ", 타입: " << pac->PacID << std::endl;
+	Log("PushData: 세션 ID " + std::to_string(sessionID) + ", 패킷 크기: " + std::to_string(pac->PacketSize) + ", 타입: " + std::to_string(pac->PacID));
 
 	unsigned int curUserID = 0;
 	if (m_sessionToUserMap.find(sessionID) != m_sessionToUserMap.end())
@@ -116,7 +116,7 @@ void MainServer::DisconnectClient(unsigned int sessionID)
 	}
 	else
 	{
-		std::cout << "[DisconnectClient] 잘못된 세션(" << sessionID << ")에 대한 요청\n";
+		Log("DisconnectClient: 세션 ID " + std::to_string(sessionID) + "에 대한 유저가 존재하지 않음");
 	}
 }
 
@@ -186,7 +186,7 @@ void MainServer::PacketWorker()
 		}
 		else 
 		{
-			std::cerr << "유효하지 않은 세션 ID 또는 유저 ID: " << pair.first << std::endl;
+			Log("유저가 존재하지 않음: " + std::to_string(pair.first));
 			delete[] reinterpret_cast<char*>(pair.second); // 유저가 없으면 패킷은 해제
 		}
 	}
@@ -196,7 +196,7 @@ void MainServer::PacketProcess(std::shared_ptr<User> user, PacketBase* pac)
 {
 	if (!m_dispatcher.DispatchPacket(user, pac))
 	{
-		std::cerr << "처리할 수 없는 패킷 ID: " << pac->PacID << std::endl;
+		Log("처리할 수 없는 패킷 ID: " + std::to_string(pac->PacID) + " (UserID: " + std::to_string(user->GetUserID()) + ")");
 	}
 
 	delete[] reinterpret_cast<char*>(pac);
@@ -214,4 +214,26 @@ void MainServer::RegisterPacketHandlers()
 	m_dispatcher.RegisterHandler(std::make_unique<UserPacketHandler>(m_IOCP));
 	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_IOCP, m_maps));
 	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_IOCP, m_maps, m_userToSessionMap));
+}
+
+void MainServer::OutputServerMessages()
+{
+	while (m_isRunning)
+	{
+		std::string logMessage;
+		if (m_logQueue.try_pop(logMessage))
+		{
+			std::cout << logMessage << std::endl; // 로그 메시지 출력
+		}
+		else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 대기 시간 조정
+		}
+	}
+}
+
+void MainServer::Log(const std::string& message)
+{
+	std::scoped_lock lock(m_logMutex);
+	std::cout << message << std::endl;
 }

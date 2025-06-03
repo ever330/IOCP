@@ -41,4 +41,6 @@ private:
 	int m_responseCount;
 
 	std::mutex m_mutex;
+
+	const int m_monsterSpawnCount = 10;
 };

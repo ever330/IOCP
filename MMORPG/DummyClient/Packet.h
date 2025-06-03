@@ -19,16 +19,18 @@ enum PacketID : uint16_t
 	S2CChangeMapAck,
 	S2CPlayerEnter,
 	S2CPlayerLeave,
+	S2CPlayerState,
 
 	// 몬스터 관련
 	S2CMonsterRespawn = 400,
 	S2CMonsterState,
+	S2CMonsterHit,
 
 	// 플레이어 관련
 	C2SPlayerMove = 500,
 	S2CPlayerMove,
-	C2SPlayerAction,
-	S2CPlayerAction,
+	C2SPlayerAttack,
+	S2CPlayerAttack,
 	C2SPlayerChat,
 	S2CPlayerChat,
 };
@@ -88,7 +90,23 @@ struct S2CPlayerEnterPacket
 
 struct S2CPlayerLeavePacket
 {
+	uint16_t UserID;
 	char Name[NAME_SIZE];
+};
+
+struct S2CPlayerStatePacket
+{
+	uint16_t PlayerCount;
+};
+
+struct S2CPlayerStateInfo
+{
+	uint16_t UserID;
+	char Name[NAME_SIZE];
+
+	float PosX;
+	float PosY;
+	float PosZ;
 };
 
 struct S2CMonsterRespawnPacket
@@ -96,10 +114,10 @@ struct S2CMonsterRespawnPacket
 	uint16_t MonsterCount;
 };
 
-struct MonsterRespawnInfo
+struct S2CMonsterRespawnInfo
 {
-	uint16_t MonsterID;	// 실제 DB를 참고하게 될 ID
-	uint16_t SpawnID;	// 각 맵에서 부여받는 ID
+	uint16_t MonsterID;
+	uint16_t SpawnID;
 
 	float SpawnPosX;
 	float SpawnPosY;
@@ -123,53 +141,45 @@ struct S2CMonsterStateInfo
 	float PosY;
 	float PosZ;
 
-	uint8_t Direction;		// 0 : 왼쪽, 1 : 오른쪽
-
+	uint16_t MaxHP;
 	uint16_t CurHP;
 };
 
 struct C2SPlayerMovePacket
 {
-	float PosX;
-	float PosY;
-	float PosZ;
-
-	float DirX;
-	float DirY;
-	float DirZ;
-
-	uint8_t MoveType;		// 걷기, 달리기, 점프 등
+	uint8_t MoveDirection; // 0: LEFT, 1: RIGHT, 2: UP, 3: DOWN
 };
 
 struct S2CPlayerMovePacket
 {
-	uint16_t UserID;
-
-	float PosX;
-	float PosY;
-	float PosZ;
-
-	float DirX;
-	float DirY;
-	float DirZ;
-
-	uint8_t MoveType;
+	char Name[NAME_SIZE];
+	uint8_t MoveDirection;
 };
 
-struct C2SPlayerActionPacket
+struct C2SPlayerAttackPacket
 {
-	uint16_t ActionType;	// 공격, 스킬 등
-	uint32_t TargetID;      // 몬스터 ID, 유저 ID 등
-	float DirX, DirY, DirZ; // 바라보는 방향
+	uint8_t AttackDirection;
 };
 
-struct S2CPlayerActionPacket
+struct S2CPlayerAttackPacket
 {
 	uint16_t UserID;
-	uint16_t ActionType;
-	uint32_t TargetID;
-	uint32_t Damage;
-	float DirX, DirY, DirZ;
+	uint8_t AttackDirection;
+};
+
+struct S2CMonsterHitPacket
+{
+	uint16_t MonsterCount;
+};
+
+struct S2CMonsterHitInfo
+{
+	uint16_t MonsterID;
+	uint16_t SpawnID;
+
+	uint8_t AttackDirection;
+
+	uint16_t Damage;
 };
 
 struct C2SPlayerChatPacket
@@ -183,3 +193,4 @@ struct S2CPlayerChatPacket
 	char Name[NAME_SIZE];
 	char ChatMsg[MSG_SIZE];
 };
+#pragma pack(pop)

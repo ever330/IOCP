@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <random>
+#include <concurrent_queue.h>
 
 // Socket
 #include <winsock2.h>

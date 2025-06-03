@@ -57,17 +57,33 @@ void Character::Move(int dir)
 	if (dir == 0)
 	{
 		m_position.x -= 10.0f;
+		if (m_position.x < 10.0f)
+		{
+			m_position.x = 10.0f;
+		}
 	}
 	else if (dir == 1)
 	{
 		m_position.x += 10.0f;
+		if (m_position.x > MAP_MAX_X + 10.0f)
+		{
+			m_position.x = MAP_MAX_X + 10.0f;
+		}
 	}
 	else if (dir == 2)
 	{
 		m_position.y -= 10.0f;
+		if (m_position.y < 10.0f)
+		{
+			m_position.y = 10.0f;
+		}
 	}
 	else if (dir == 3)
 	{
 		m_position.y += 10.0f;
+		if (m_position.y > MAP_MAX_Y + 10.0f)
+		{
+			m_position.y = MAP_MAX_Y + 10.0f;
+		}
 	}
 }
