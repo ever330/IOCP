@@ -5,10 +5,17 @@
 #include "Packet.h"
 #include "Vector3.h"
 #include "PacketDispatcher.h"
+#include "MapManager.h"
 
 class IOCP;
 class User;
 class Map;
+
+struct PacketJob 
+{
+	unsigned int userID;
+	PacketBase* packet;
+};
 
 class MainServer
 {
@@ -40,7 +47,7 @@ public:
 	void Log(const std::string& message); // 로그 메시지 큐에 추가
 
 private:
-	void PacketWorker();
+	void PacketWorker(int index);
 	void PacketProcess(std::shared_ptr<User> user, PacketBase* pac);
 	unsigned int GenerateUserID();
 
@@ -50,14 +57,11 @@ private:
 
 private:
 	std::shared_ptr<IOCP> m_IOCP;
-	std::queue<std::pair<unsigned int, PacketBase*>> m_packets;
 	mutable std::mutex m_mutex;
 	std::unordered_map<unsigned int, std::shared_ptr<User>> m_users;
 
 	std::unordered_map<unsigned int, unsigned int> m_sessionToUserMap;    // sessionID와 userID 매칭
 	std::unordered_map<unsigned int, unsigned int> m_userToSessionMap;    // userID와 sessionID 매칭
-
-	std::unordered_map<unsigned int, std::shared_ptr<Map>> m_maps;
 
 	std::mutex m_logMutex; // 로그 메시지 큐 접근을 위한 뮤텍스
 	concurrency::concurrent_queue<std::string> m_logQueue; // 로그 메시지 큐
@@ -65,11 +69,14 @@ private:
 	unsigned int m_nextID;
 
 	PacketDispatcher m_dispatcher;
+	MapManager m_mapManager;
 
 	// 패킷 처리 스레드 관련.
-	std::thread m_packetThread;
+	std::vector<std::thread> m_packetWorkers;
+	std::vector<std::queue<PacketJob>> m_workerQueues;
+	std::mutex m_workerMutexes[PACKET_THREAD];
+	std::condition_variable m_workerConds[PACKET_THREAD];
 	std::atomic<bool> m_isRunning = false;
-	std::condition_variable m_condition;
 
 	// 서버 메시지 출력 관련.
 	std::thread m_outputThread;

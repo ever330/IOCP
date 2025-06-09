@@ -16,28 +16,19 @@ bool MainServer::StartServer()
 	RegisterPacketHandlers();
 
 	m_isRunning = true;
-	m_packetThread = std::thread(&MainServer::PacketWorker, this);
+	m_workerQueues.resize(PACKET_THREAD);
+
+	for (int i = 0; i < PACKET_THREAD; ++i) {
+		m_packetWorkers.emplace_back([this, i]() { PacketWorker(i); });
+	}
 
 	m_outputThread = std::thread(&MainServer::OutputServerMessages, this);
 
-	m_maps.emplace(1001, std::make_shared<Map>(1001, m_IOCP));
-	m_maps.emplace(1002, std::make_shared<Map>(1002, m_IOCP));
-	m_maps.emplace(1003, std::make_shared<Map>(1003, m_IOCP));
-	m_maps.emplace(2001, std::make_shared<Map>(2001, m_IOCP));
-	m_maps.emplace(2002, std::make_shared<Map>(2002, m_IOCP));
-	m_maps.emplace(3001, std::make_shared<Map>(3001, m_IOCP));
-	m_maps.emplace(3002, std::make_shared<Map>(3002, m_IOCP));
-	m_maps.emplace(4001, std::make_shared<Map>(4001, m_IOCP));
-	m_maps.emplace(4002, std::make_shared<Map>(4002, m_IOCP));
-	m_maps.emplace(4003, std::make_shared<Map>(4003, m_IOCP));
-	m_maps.emplace(5001, std::make_shared<Map>(5001, m_IOCP));
+	m_mapManager.Initialize(m_IOCP);
 
 	while (true)
 	{
-		for (auto& map : m_maps)
-		{
-			map.second->Update();
-		}
+		m_mapManager.Update();
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
@@ -74,17 +65,27 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 		m_userToSessionMap[curUserID] = sessionID;
 	}
 
-	std::scoped_lock lock(m_mutex);
-	m_packets.push(std::make_pair(curUserID, pac));
-	m_condition.notify_one(); // 대기 중인 워커 스레드 깨우기
+	int index = sessionID % PACKET_THREAD;
+	{
+		std::lock_guard<std::mutex> lock(m_workerMutexes[index]);
+		m_workerQueues[index].push({ curUserID, pac });
+	}
+	m_workerConds[index].notify_one();
 }
 
 void MainServer::StopServer()
 {
 	m_isRunning = false;
-	m_condition.notify_all();  // 모든 스레드 깨우기
-	if (m_packetThread.joinable())
-		m_packetThread.join();
+	for (int i = 0; i < PACKET_THREAD; ++i)
+	{
+		m_workerConds[i].notify_all();  // 모든 스레드 깨우기
+	}
+
+	for (auto& worker : m_packetWorkers)
+	{
+		if (worker.joinable())
+			worker.join();
+	}
 
 	m_IOCP->Finalize();
 }
@@ -98,18 +99,16 @@ void MainServer::DisconnectClient(unsigned int sessionID)
 	{
 		unsigned int curUserID = it->second;
 
-		// 1. 맵에서 제거
 		auto it = m_users.find(curUserID);
 		if (it != m_users.end())
 		{
 			auto user = it->second;
 			if (user && user->GetCurrentMapID())
 			{
-				m_maps[user->GetCurrentMapID()]->RemoveUser(user);
+				m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
 			}
 		}
 
-		// 2. MainServer에서 제거
 		m_users.erase(curUserID);
 		m_sessionToUserMap.erase(sessionID);
 		m_userToSessionMap.erase(curUserID);
@@ -146,48 +145,48 @@ std::shared_ptr<User> MainServer::GetUserByID(unsigned int userID) const
 	return nullptr;
 }
 
-void MainServer::PacketWorker()
+void MainServer::PacketWorker(int index)
 {
 	while (m_isRunning)
 	{
-		std::unique_lock<std::mutex> lock(m_mutex);
+		PacketJob job;
 
-		m_condition.wait(lock, [this]() {
-			return !m_packets.empty() || !m_isRunning;
-			});
-
-		if (!m_isRunning) break;
-
-		auto pair = m_packets.front();
-		m_packets.pop();
-
-		// 유저 정보 추출
-		std::shared_ptr<User> user = nullptr;
-		auto it = m_sessionToUserMap.find(pair.first);
-		if (it != m_sessionToUserMap.end()) 
 		{
-			auto userIt = m_users.find(it->second);
-			if (userIt != m_users.end()) 
+			std::unique_lock<std::mutex> lock(m_workerMutexes[index]);
+			m_workerConds[index].wait(lock, [&]() {
+				return !m_workerQueues[index].empty() || !m_isRunning;
+				});
+
+			if (!m_isRunning && m_workerQueues[index].empty())
+				break;
+
+			job = m_workerQueues[index].front();
+			m_workerQueues[index].pop();
+		}
+
+		std::shared_ptr<User> user;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex); // m_users 접근 보호
+			auto it = m_users.find(job.userID);
+			if (it != m_users.end()) 
 			{
-				user = userIt->second;
+				user = it->second;
 			}
-			else
+			else 
 			{
-				user = std::make_shared<User>(pair.first, "");
-				m_users.insert({ pair.first, user });
+				user = std::make_shared<User>(job.userID, "");
+				m_users.insert({ job.userID, user });
 			}
 		}
 
-		lock.unlock();
-
-		if (user)
+		if (user) 
 		{
-			PacketProcess(user, pair.second);
+			PacketProcess(user, job.packet);
 		}
 		else 
 		{
-			Log("유저가 존재하지 않음: " + std::to_string(pair.first));
-			delete[] reinterpret_cast<char*>(pair.second); // 유저가 없으면 패킷은 해제
+			Log("유저가 존재하지 않음: " + std::to_string(job.userID));
+			delete[] reinterpret_cast<char*>(job.packet);
 		}
 	}
 }
@@ -212,8 +211,8 @@ unsigned int MainServer::GenerateUserID()
 void MainServer::RegisterPacketHandlers()
 {
 	m_dispatcher.RegisterHandler(std::make_unique<UserPacketHandler>(m_IOCP));
-	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_IOCP, m_maps));
-	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_IOCP, m_maps, m_userToSessionMap));
+	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_IOCP, m_mapManager));
+	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_IOCP, m_mapManager, m_userToSessionMap));
 }
 
 void MainServer::OutputServerMessages()

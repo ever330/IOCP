@@ -4,14 +4,14 @@
 #include "IPacketHandler.h"
 #include "User.h"
 #include "Map.h"
+#include "MapManager.h"
 
 class IOCP;
 
 class MapPacketHandler : public IPacketHandler
 {
 public:
-    MapPacketHandler(std::shared_ptr<IOCP> iocp,
-        std::unordered_map<unsigned int, std::shared_ptr<Map>>& maps,
+    MapPacketHandler(std::shared_ptr<IOCP> iocp, MapManager& mapManager,
         std::unordered_map<unsigned int, unsigned int>& userToSessionMap);
 
     bool CanHandle(int packetID) const override;
@@ -24,6 +24,6 @@ private:
 
 private:
     std::shared_ptr<IOCP> m_IOCP;
-    std::unordered_map<unsigned int, std::shared_ptr<Map>>& m_maps;
+	MapManager& m_mapManager;
     std::unordered_map<unsigned int, unsigned int>& m_userToSessionMap;
 };

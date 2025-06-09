@@ -37,6 +37,9 @@
     <Filter Include="User">
       <UniqueIdentifier>{cad2c245-3ed4-4e94-8601-203bc92baf6a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Manager">
+      <UniqueIdentifier>{4e9aed11-4228-495f-855f-d1e9851392f8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -71,6 +74,9 @@
     </ClCompile>
     <ClCompile Include="User.cpp">
       <Filter>User</Filter>
+    </ClCompile>
+    <ClCompile Include="MapManager.cpp">
+      <Filter>Manager</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -121,6 +127,9 @@
     </ClInclude>
     <ClInclude Include="User.h">
       <Filter>User</Filter>
+    </ClInclude>
+    <ClInclude Include="MapManager.h">
+      <Filter>Manager</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -4,8 +4,9 @@
 #define MAX_USER_COUNT 1000
 #define PORT 3030
 
-// MainServer에서 서버 콘텐츠 용으로 사용할 스레드 수
-#define CONTENTS_THREAD 2
+// 각 용도별 스레드 카운트
+#define IOCP_THREAD 8
+#define PACKET_THREAD 8
 
 #define HEARTBEAT_INTERVAL_MS 5000
 #define TIMEOUT_MS 15000

@@ -2,8 +2,8 @@
 #include "IOCP.h"
 #include "MainServer.h" 
 
-ChatPacketHandler::ChatPacketHandler(std::shared_ptr<IOCP> iocp, std::unordered_map<unsigned int, std::shared_ptr<Map>>&maps)
-    : m_IOCP(iocp), m_maps(maps) 
+ChatPacketHandler::ChatPacketHandler(std::shared_ptr<IOCP> iocp, MapManager& mapManager)
+    : m_IOCP(iocp), m_mapManager(mapManager)
 {
 }
 
@@ -14,8 +14,8 @@ bool ChatPacketHandler::CanHandle(int packetID) const
 
 void ChatPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* packet)
 {
-    auto mapIt = m_maps.find(user->GetCurrentMapID());
-    if (mapIt == m_maps.end()) return;
+	auto curMap = m_mapManager.GetMap(user->GetCurrentMapID());
+    if (curMap == nullptr) return;
 
     C2SPlayerChatPacket chatPacket;
     memcpy(&chatPacket, packet->Body, packet->PacketSize - sizeof(PacketBase));
@@ -33,7 +33,7 @@ void ChatPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* packet)
     newPac->PacketSize = packetSize;
     memcpy(newPac->Body, &response, sizeof(S2CPlayerChatPacket));
 
-    MainServer::Instance().BroadCast(mapIt->second->GetUsers(), newPac);
+    MainServer::Instance().BroadCast(curMap->GetUsers(), newPac);
 
 	delete[] raw;
 }

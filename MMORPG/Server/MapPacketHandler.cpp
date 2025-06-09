@@ -2,9 +2,9 @@
 #include "IOCP.h"
 
 MapPacketHandler::MapPacketHandler(std::shared_ptr<IOCP> iocp,
-    std::unordered_map<unsigned int, std::shared_ptr<Map>>& maps,
+    MapManager& mapManager,
     std::unordered_map<unsigned int, unsigned int>& userToSessionMap)
-    : m_IOCP(iocp), m_maps(maps), m_userToSessionMap(userToSessionMap) 
+    : m_IOCP(iocp), m_mapManager(mapManager), m_userToSessionMap(userToSessionMap)
 {
 }
 
@@ -31,24 +31,24 @@ void MapPacketHandler::HandleChangeMap(std::shared_ptr<User> user, PacketBase* p
     memcpy(&changeMap, packet->Body, packet->PacketSize - sizeof(PacketBase));
 
     unsigned int currentMapID = user.get()->GetCurrentMapID();
-    auto oldMap = m_maps.find(currentMapID);
-    if (oldMap != m_maps.end())
+    auto oldMap = m_mapManager.GetMap(currentMapID);
+    if (oldMap != nullptr)
     {
-        oldMap->second->RemoveUser(user);
+        oldMap->RemoveUser(user);
     }
 
     S2CChangeMapAckPacket ack;
-    auto newMap = m_maps.find(changeMap.MapID);
-    if (newMap != m_maps.end())
+    auto newMap = m_mapManager.GetMap(changeMap.MapID);
+    if (newMap != nullptr)
     {
-        newMap->second->AddUser(user);
+        newMap->AddUser(user);
         user.get()->SetCurrentMapID(changeMap.MapID);
-        user.get()->GetCharacter().Respawn(newMap->second->GetUserSpawnPos());
+        user.get()->GetCharacter().Respawn(newMap->GetUserSpawnPos());
 
         ack.Result = 1;
         ack.MapID = changeMap.MapID;
-        ack.SpawnPosX = newMap->second->GetUserSpawnPos().x;
-        ack.SpawnPosY = newMap->second->GetUserSpawnPos().y;
+        ack.SpawnPosX = newMap->GetUserSpawnPos().x;
+        ack.SpawnPosY = newMap->GetUserSpawnPos().y;
         ack.SpawnPosZ = 0.0f;
     }
     else
@@ -79,10 +79,10 @@ void MapPacketHandler::HandlePlayerAttack(std::shared_ptr<User> user, PacketBase
 	memcpy(&attackPacket, packet->Body, packet->PacketSize - sizeof(PacketBase));
 
     unsigned int currentMapID = user.get()->GetCurrentMapID();
-    auto currentMap = m_maps.find(currentMapID);
+    auto currentMap = m_mapManager.GetMap(currentMapID);
 
-    if (currentMap != m_maps.end())
+    if (currentMap != nullptr)
     {
-        currentMap->second->PlayerAttack(user, attackPacket);
+        currentMap->PlayerAttack(user, attackPacket);
     }
 }

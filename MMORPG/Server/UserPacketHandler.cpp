@@ -39,7 +39,7 @@ void UserPacketHandler::HandleSetName(std::shared_ptr<User> user, PacketBase* pa
 	newPac->PacketSize = packetSize;
 	memcpy(newPac->Body, &setName, packetSize - sizeof(PacketBase));
 
-	m_IOCP->BroadCast(buffer, packetSize);
+	//m_IOCP->BroadCast(buffer, packetSize);
 }
 
 void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase* pac)
@@ -60,5 +60,6 @@ void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase*
 	newPac->PacID = S2CPlayerMove;
 	newPac->PacketSize = packetSize;
 	memcpy(newPac->Body, &response, sizeof(response));
-	m_IOCP->BroadCast(buffer, packetSize);
+
+	//m_IOCP->BroadCast(buffer, packetSize);
 }

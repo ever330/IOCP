@@ -134,6 +134,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainServer.cpp" />
     <ClCompile Include="Map.cpp" />
+    <ClCompile Include="MapManager.cpp" />
     <ClCompile Include="MapPacketHandler.cpp" />
     <ClCompile Include="Monster.cpp" />
     <ClCompile Include="PacketDispatcher.cpp" />
@@ -147,6 +148,7 @@
     <ClInclude Include="IOCP.h" />
     <ClInclude Include="MainServer.h" />
     <ClInclude Include="Map.h" />
+    <ClInclude Include="MapManager.h" />
     <ClInclude Include="MapPacketHandler.h" />
     <ClInclude Include="Monster.h" />
     <ClInclude Include="Packet.h" />

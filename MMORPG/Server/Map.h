@@ -15,6 +15,7 @@ public:
 	~Map();
 
 public:
+	void Initialize();
 	void Update();
 
 	void AddUser(std::shared_ptr<User> user);

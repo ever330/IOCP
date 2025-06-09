@@ -18,7 +18,7 @@ struct IOData
     int mode;
 
     std::shared_ptr<char[]> packetMemory;
-    Session* session = nullptr;
+	std::shared_ptr<Session> session;
     int sessionID;
 
     char* GetBuffer()
@@ -39,7 +39,7 @@ public:
 private:
     void WorkerThread();
     bool PostAccept(std::shared_ptr<IOData> ioData);
-    bool PostRecv(Session* session, std::shared_ptr<IOData> ioData);
+    bool PostRecv(std::shared_ptr<Session> session, std::shared_ptr<IOData> ioData);
     void EraseSession(unsigned int sessionID);
     unsigned int GenerateSessionID();
 	void HeartBeatThread();
@@ -47,9 +47,9 @@ private:
 
 private:
     HANDLE m_hIocp;
-    Session* m_serverSession;
+    std::shared_ptr<Session> m_serverSession;
     std::vector<std::thread> m_workerThreads;
-    std::unordered_map<unsigned int, Session*> m_sessions;
+    std::unordered_map<unsigned int, std::shared_ptr<Session>> m_sessions;
     unsigned int m_nextSessionID;
     std::queue<unsigned int> m_availableSessionIDs;
 

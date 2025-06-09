@@ -7,21 +7,24 @@
 Map::Map(int id, std::shared_ptr<IOCP> iocp)
 	: m_id(id), m_IOCP(iocp), m_responseCount(0)
 {
+}
+
+Map::~Map()
+{
+	// 맵 제거
+}
+
+void Map::Initialize()
+{
 	for (int i = 1; i <= m_monsterSpawnCount; ++i)
 	{
 		// 임시 스폰 위치. Map 관련 DB가 있을 경우, 각 맵 별로 몬스터 스폰위치가 정해져야 함
 		Vector3 spawnPos = { GetRandomFloat(0.0f, MAP_MAX_X), GetRandomFloat(0.0f, MAP_MAX_Y), 0.0f };
 		m_monsters.insert({ i, std::make_shared<Monster>(1, spawnPos) });
 	}
-
 	// 임시 유저 스폰 위치.
 	m_userSpawnPos.x = 100.0f;
 	m_userSpawnPos.y = 100.0f;
-}
-
-Map::~Map()
-{
-	// 맵 제거
 }
 
 void Map::Update()
