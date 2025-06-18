@@ -1,6 +1,7 @@
 #include "UserPacketHandler.h"
 #include "IOCP.h"
 #include "User.h"
+#include "MainServer.h"
 
 UserPacketHandler::UserPacketHandler(std::shared_ptr<IOCP> iocp)
 	: m_IOCP(iocp)
@@ -14,7 +15,11 @@ bool UserPacketHandler::CanHandle(int packetID) const
 
 void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 {
-	if (pac->PacID == C2SSetName)
+	if (pac->PacID == C2SConnect)
+	{
+		HandleUserConnect(user, pac);
+	}
+	else if (pac->PacID == C2SSetName)
 	{
 		HandleSetName(user, pac);
 	}
@@ -24,12 +29,29 @@ void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 	}
 }
 
+void UserPacketHandler::HandleUserConnect(std::shared_ptr<User> dummyUser, PacketBase* pac)
+{
+	auto userId = m_userID;
+	auto user = std::make_shared<User>(userId, "");
+
+	m_userID++;
+
+	MainServer::Instance().AddUser(user);
+}
+
+void UserPacketHandler::HandleUserDisconnect(std::shared_ptr<User> user, PacketBase* pac)
+{
+	MainServer::Instance().DisconnectUser(user.get()->GetUserID());
+}
+
 void UserPacketHandler::HandleSetName(std::shared_ptr<User> user, PacketBase* pac)
 {
 	C2SSetNamePacket setName;
 	memcpy(&setName, pac->Body, sizeof(setName));
 
 	user->SetUserName(setName.Name);
+
+	user->SetConnected(true);
 
 	int packetSize = pac->PacketSize;
 

@@ -22,9 +22,13 @@ public:
 
 	Character& GetCharacter();
 
+	void SetConnected(bool isConnected);
+	bool IsConnected() const;
+
 private:
 	unsigned int m_userID;
 	std::string m_userName;
 	unsigned int m_currentMapID;
 	Character m_character;
+	bool m_isConnected;
 };

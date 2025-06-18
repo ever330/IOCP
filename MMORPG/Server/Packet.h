@@ -4,6 +4,15 @@
 
 enum PacketID : uint16_t
 {
+	// 서버 접속, 접속 종료
+	C2SConnect = 0,
+	S2CConnectAck,
+	C2SDisconnect,
+	C2SLogin,
+	S2CLoginAck,
+	C2SSignUp,
+	S2CSignUpAck,
+
 	// 기존 임시용
 	C2SSetName = 100,
 	S2CNewUserAlert,
@@ -41,6 +50,19 @@ struct PacketBase
 	uint16_t PacketSize;
 	PacketID PacID;
 	char Body[];
+};
+
+struct C2SConnectPacket
+{
+};
+
+struct S2CConnectAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+};
+
+struct C2SDisconnectPacket
+{
 };
 
 struct C2SSetNamePacket

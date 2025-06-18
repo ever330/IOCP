@@ -39,17 +39,20 @@ public:
 	bool StartServer();
 	void PushData(unsigned int sessionID, char* data);
 	void StopServer();
-	void DisconnectClient(unsigned int sessionID);
+	void DisconnectUserBySessionID(unsigned int sessionID);
+	void DisconnectUser(unsigned int userID);
 	void BroadCast(const std::unordered_set<unsigned int>& userIDs, PacketBase* packet);
+	void AddUser(std::shared_ptr<User> user);
 
 	std::shared_ptr<User> GetUserByID(unsigned int userID) const;
 
-	void Log(const std::string& message); // 로그 메시지 큐에 추가
+	void Log(const std::string& message);
+
+	void TestSQL();
 
 private:
 	void PacketWorker(int index);
 	void PacketProcess(std::shared_ptr<User> user, PacketBase* pac);
-	unsigned int GenerateUserID();
 
 	void RegisterPacketHandlers(); // 핸들러 등록 함수
 
@@ -63,10 +66,7 @@ private:
 	std::unordered_map<unsigned int, unsigned int> m_sessionToUserMap;    // sessionID와 userID 매칭
 	std::unordered_map<unsigned int, unsigned int> m_userToSessionMap;    // userID와 sessionID 매칭
 
-	std::mutex m_logMutex; // 로그 메시지 큐 접근을 위한 뮤텍스
 	concurrency::concurrent_queue<std::string> m_logQueue; // 로그 메시지 큐
-
-	unsigned int m_nextID;
 
 	PacketDispatcher m_dispatcher;
 	MapManager m_mapManager;

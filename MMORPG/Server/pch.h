@@ -30,9 +30,7 @@
 #include <mutex>
 
 // DB
-#include <sqlext.h>
-#include <sqltypes.h>
-#include <sql.h>
+#include <mysql/jdbc.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "odbc32.lib")

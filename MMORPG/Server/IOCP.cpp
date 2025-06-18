@@ -147,6 +147,15 @@ void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, in
 	}
 
 	DWORD bytesSent = 0;
+
+	if (it->second->socket == INVALID_SOCKET)
+	{
+		MainServer::Instance().Log("세션 소켓이 유효하지 않습니다: " + std::to_string(sessionID));
+		MainServer::Instance().DisconnectUserBySessionID(sessionID);
+		EraseSession(sessionID);
+		return;
+	}
+
 	int result = WSASend(it->second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
 	if (result == SOCKET_ERROR)
 	{
@@ -155,8 +164,6 @@ void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, in
 		{
 			MainServer::Instance().Log("WSASend 실패: " + std::to_string(error));
 			EraseSession(sessionID);
-
-			MainServer::Instance().DisconnectClient(sessionID);
 			return;
 		}
 	}
@@ -188,7 +195,6 @@ void IOCP::BroadCast(std::shared_ptr<char[]> packet, int byteLength)
 		{
 			MainServer::Instance().Log("세션 소켓이 유효하지 않습니다: " + std::to_string(session.first));
 			EraseSession(session.first);
-			MainServer::Instance().DisconnectClient(session.first);
 		}
 	}
 }
@@ -381,7 +387,6 @@ void IOCP::WorkerThread()
 			if (session) 
 			{
 				EraseSession(session->sessionID);
-				MainServer::Instance().DisconnectClient(session->sessionID);
 			}
 			continue;
 		}
@@ -435,7 +440,6 @@ void IOCP::WorkerThread()
 			{
 				MainServer::Instance().Log("PostRecv 실패: " + std::to_string(WSAGetLastError()));
 				EraseSession(sessionID);
-				MainServer::Instance().DisconnectClient(sessionID);
 				break;
 			}
 
@@ -465,7 +469,6 @@ void IOCP::WorkerThread()
 			{
 				MainServer::Instance().Log("PostRecv 실패: " + std::to_string(WSAGetLastError()));
 				EraseSession(session->sessionID);
-				MainServer::Instance().DisconnectClient(session->sessionID);
 			}
 			break;
 		}

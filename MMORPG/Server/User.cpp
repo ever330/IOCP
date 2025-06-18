@@ -1,6 +1,6 @@
 #include "User.h"
 
-User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_character({ 0.0f, 0.0f, 0.0f }) 
+User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_character({ 0.0f, 0.0f, 0.0f }), m_isConnected(false)
 {
 
 }
@@ -43,4 +43,14 @@ unsigned int User::GetCurrentMapID() const
 Character& User::GetCharacter() 
 {
 	return m_character;
+}
+
+void User::SetConnected(bool isConnected)
+{
+	m_isConnected = isConnected;
+}
+
+bool User::IsConnected() const
+{
+	return m_isConnected;
 }

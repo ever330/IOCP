@@ -246,6 +246,7 @@ void Map::MonsterStateUpdate()
 			monsterStates.push_back(info);
 		}
 	}
+
 	if (!monsterStates.empty())
 	{
 		const uint16_t monsterCount = static_cast<uint16_t>(monsterStates.size());

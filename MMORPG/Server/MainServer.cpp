@@ -12,7 +12,6 @@ bool MainServer::StartServer()
 
 	m_IOCP->Initialize();
 
-	m_nextID = 1;
 	RegisterPacketHandlers();
 
 	m_isRunning = true;
@@ -25,6 +24,13 @@ bool MainServer::StartServer()
 	m_outputThread = std::thread(&MainServer::OutputServerMessages, this);
 
 	m_mapManager.Initialize(m_IOCP);
+
+	try {
+		TestSQL();
+	}
+	catch (sql::SQLException& e) {
+		std::cerr << "MySQL 오류: " << e.what() << std::endl;
+	}
 
 	while (true)
 	{
@@ -60,7 +66,6 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 	}
 	else
 	{
-		curUserID = GenerateUserID();
 		m_sessionToUserMap[sessionID] = curUserID;
 		m_userToSessionMap[curUserID] = sessionID;
 	}
@@ -90,19 +95,19 @@ void MainServer::StopServer()
 	m_IOCP->Finalize();
 }
 
-void MainServer::DisconnectClient(unsigned int sessionID)
+void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
 {
 	std::scoped_lock lock(m_mutex);
 
-	auto it = m_sessionToUserMap.find(sessionID);
-	if (it != m_sessionToUserMap.end())
+	auto sessionIt = m_sessionToUserMap.find(sessionID);
+	if (sessionIt != m_sessionToUserMap.end())
 	{
-		unsigned int curUserID = it->second;
+		unsigned int curUserID = sessionIt->second;
 
-		auto it = m_users.find(curUserID);
-		if (it != m_users.end())
+		auto userIt = m_users.find(curUserID);
+		if (userIt != m_users.end())
 		{
-			auto user = it->second;
+			auto user = userIt->second;
 			if (user && user->GetCurrentMapID())
 			{
 				m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
@@ -116,6 +121,30 @@ void MainServer::DisconnectClient(unsigned int sessionID)
 	else
 	{
 		Log("DisconnectClient: 세션 ID " + std::to_string(sessionID) + "에 대한 유저가 존재하지 않음");
+	}
+}
+
+void MainServer::DisconnectUser(unsigned int userID)
+{
+	std::scoped_lock lock(m_mutex);
+	auto it = m_users.find(userID);
+
+	if (it != m_users.end())
+	{
+		auto user = it->second;
+		unsigned int sessionID = m_userToSessionMap.find(userID)->second;
+
+		if (user->GetCurrentMapID())
+		{
+			m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
+		}
+		m_users.erase(it);
+		m_sessionToUserMap.erase(sessionID);
+		m_userToSessionMap.erase(userID);
+	}
+	else
+	{
+		Log("DisconnectUser: 유저 ID " + std::to_string(userID) + "에 대한 유저가 존재하지 않음");
 	}
 }
 
@@ -133,6 +162,19 @@ void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, Pack
 
 			m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
 		}
+	}
+}
+
+void MainServer::AddUser(std::shared_ptr<User> user)
+{
+	std::scoped_lock lock(m_mutex);
+	if (m_users.find(user->GetUserID()) == m_users.end())
+	{
+		m_users[user->GetUserID()] = user;
+	}
+	else
+	{
+		Log("AddUser: 유저 ID " + std::to_string(user->GetUserID()) + "는 이미 존재합니다.");
 	}
 }
 
@@ -164,22 +206,19 @@ void MainServer::PacketWorker(int index)
 			m_workerQueues[index].pop();
 		}
 
-		std::shared_ptr<User> user;
+		std::shared_ptr<User> user = nullptr;
+
 		{
-			std::lock_guard<std::mutex> lock(m_mutex); // m_users 접근 보호
+			std::lock_guard<std::mutex> lock(m_mutex);
+
 			auto it = m_users.find(job.userID);
 			if (it != m_users.end()) 
 			{
 				user = it->second;
 			}
-			else 
-			{
-				user = std::make_shared<User>(job.userID, "");
-				m_users.insert({ job.userID, user });
-			}
 		}
 
-		if (user) 
+		if (user || job.packet->PacID == C2SConnect) 
 		{
 			PacketProcess(user, job.packet);
 		}
@@ -199,13 +238,6 @@ void MainServer::PacketProcess(std::shared_ptr<User> user, PacketBase* pac)
 	}
 
 	delete[] reinterpret_cast<char*>(pac);
-}
-
-// IOCP의 SessionID와는 별도의 유저 개별 부여 ID
-unsigned int MainServer::GenerateUserID()
-{
-	// 임시. DB가 있을 경우 유저마다 고유하게 부여된 ID를 사용해야 함
-	return m_nextID++;
 }
 
 void MainServer::RegisterPacketHandlers()
@@ -233,6 +265,21 @@ void MainServer::OutputServerMessages()
 
 void MainServer::Log(const std::string& message)
 {
-	std::scoped_lock lock(m_logMutex);
-	std::cout << message << std::endl;
+	m_logQueue.push(message);
+}
+
+void MainServer::TestSQL()
+{
+	sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
+	std::unique_ptr<sql::Connection> con(
+		driver->connect("tcp://127.0.0.1:3306", "root", "rainbow@@")
+	);
+
+	con->setSchema("test");
+	std::unique_ptr<sql::Statement> stmt(con->createStatement());
+	std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT * FROM test.basic"));
+
+	while (res->next()) {
+		std::cout << "ID: " << res->getInt("id") << std::endl;
+	}
 }
