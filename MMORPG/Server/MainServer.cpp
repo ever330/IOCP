@@ -1,16 +1,18 @@
 #include "MainServer.h"
-#include "IOCP.h"
 #include "User.h"
 #include "Map.h"
 #include "ChatPacketHandler.h"
 #include "MapPacketHandler.h"
 #include "UserPacketHandler.h"
+#include "AuthPacketHandler.h"
 
 bool MainServer::StartServer()
 {
-	m_IOCP = std::make_shared<IOCP>();
-
+	m_IOCP = std::make_unique<IOCP>();
 	m_IOCP->Initialize();
+
+	m_DBManager = std::make_unique<DBManager>();
+	m_DBManager->Initialize("tcp://127.0.0.1:3306", "root", "rainbow@@", "rainbow");
 
 	RegisterPacketHandlers();
 
@@ -23,14 +25,7 @@ bool MainServer::StartServer()
 
 	m_outputThread = std::thread(&MainServer::OutputServerMessages, this);
 
-	m_mapManager.Initialize(m_IOCP);
-
-	try {
-		TestSQL();
-	}
-	catch (sql::SQLException& e) {
-		std::cerr << "MySQL 오류: " << e.what() << std::endl;
-	}
+	m_mapManager.Initialize();
 
 	while (true)
 	{
@@ -73,7 +68,7 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 	int index = sessionID % PACKET_THREAD;
 	{
 		std::lock_guard<std::mutex> lock(m_workerMutexes[index]);
-		m_workerQueues[index].push({ curUserID, pac });
+		m_workerQueues[index].push({ curUserID, sessionID, pac });
 	}
 	m_workerConds[index].notify_one();
 }
@@ -148,6 +143,22 @@ void MainServer::DisconnectUser(unsigned int userID)
 	}
 }
 
+void MainServer::SendPacket(unsigned int userID, PacketBase* packet)
+{
+	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
+	memcpy(buffer.get(), packet, packet->PacketSize);
+	auto it = m_users.find(userID);
+	if (it != m_users.end())
+	{
+		unsigned int sessionID = m_userToSessionMap[userID];
+		m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
+	}
+	else
+	{
+		Log("SendPacket: 유저 ID " + std::to_string(userID) + "에 대한 유저가 존재하지 않음");
+	}
+}
+
 void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, PacketBase* packet)
 {
 	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
@@ -165,12 +176,14 @@ void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, Pack
 	}
 }
 
-void MainServer::AddUser(std::shared_ptr<User> user)
+void MainServer::AddUser(unsigned int sessionID, std::shared_ptr<User> user)
 {
 	std::scoped_lock lock(m_mutex);
 	if (m_users.find(user->GetUserID()) == m_users.end())
 	{
 		m_users[user->GetUserID()] = user;
+		m_sessionToUserMap[sessionID] = user->GetUserID();
+		m_userToSessionMap[user->GetUserID()] = sessionID;
 	}
 	else
 	{
@@ -185,6 +198,11 @@ std::shared_ptr<User> MainServer::GetUserByID(unsigned int userID) const
 	if (it != m_users.end())
 		return it->second;
 	return nullptr;
+}
+
+void MainServer::RequestQuery(const std::string& sql, std::function<void(bool, sql::ResultSet*)> callback)
+{
+	m_DBManager->RequestQuery(sql, callback);
 }
 
 void MainServer::PacketWorker(int index)
@@ -218,9 +236,13 @@ void MainServer::PacketWorker(int index)
 			}
 		}
 
-		if (user || job.packet->PacID == C2SConnect) 
+		if (user) 
 		{
 			PacketProcess(user, job.packet);
+		}
+		else if (job.packet->PacID == C2SConnect)
+		{
+			PacketProcess(job.sessionID, job.packet);
 		}
 		else 
 		{
@@ -240,11 +262,22 @@ void MainServer::PacketProcess(std::shared_ptr<User> user, PacketBase* pac)
 	delete[] reinterpret_cast<char*>(pac);
 }
 
+void MainServer::PacketProcess(unsigned int sessionID, PacketBase* pac)
+{
+	if (!m_dispatcher.DispatchPacket(sessionID, pac))
+	{
+		Log("처리할 수 없는 패킷 ID: " + std::to_string(pac->PacID) + " (UserID: " + std::to_string(sessionID) + ")");
+	}
+
+	delete[] reinterpret_cast<char*>(pac);
+}
+
 void MainServer::RegisterPacketHandlers()
 {
-	m_dispatcher.RegisterHandler(std::make_unique<UserPacketHandler>(m_IOCP));
-	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_IOCP, m_mapManager));
-	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_IOCP, m_mapManager, m_userToSessionMap));
+	m_dispatcher.RegisterHandler(std::make_unique<UserPacketHandler>());
+	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_mapManager));
+	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_mapManager, m_userToSessionMap));
+	m_dispatcher.RegisterHandler(std::make_unique<AuthPacketHandler>());
 }
 
 void MainServer::OutputServerMessages()
@@ -266,20 +299,4 @@ void MainServer::OutputServerMessages()
 void MainServer::Log(const std::string& message)
 {
 	m_logQueue.push(message);
-}
-
-void MainServer::TestSQL()
-{
-	sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-	std::unique_ptr<sql::Connection> con(
-		driver->connect("tcp://127.0.0.1:3306", "root", "rainbow@@")
-	);
-
-	con->setSchema("test");
-	std::unique_ptr<sql::Statement> stmt(con->createStatement());
-	std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT * FROM test.basic"));
-
-	while (res->next()) {
-		std::cout << "ID: " << res->getInt("id") << std::endl;
-	}
 }

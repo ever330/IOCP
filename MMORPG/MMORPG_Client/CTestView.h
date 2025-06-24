@@ -42,7 +42,7 @@ public:
 
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 
-    void SetNetwork(Network* pNetwork) { m_network = pNetwork; }
+    void SetNetwork(Network* network) { m_network = network; }
 	void SetUserNickname(const CString& nickname) { m_userNickname = nickname; }
 
     afx_msg void OnTimer(UINT_PTR nIDEvent);

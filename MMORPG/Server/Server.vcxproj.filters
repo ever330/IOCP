@@ -40,6 +40,9 @@
     <Filter Include="Manager">
       <UniqueIdentifier>{4e9aed11-4228-495f-855f-d1e9851392f8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="DBManager">
+      <UniqueIdentifier>{7a98726b-78e3-48cf-8167-5bf2fd0e1aaf}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -77,6 +80,12 @@
     </ClCompile>
     <ClCompile Include="MapManager.cpp">
       <Filter>Manager</Filter>
+    </ClCompile>
+    <ClCompile Include="DBManager.cpp">
+      <Filter>DBManager</Filter>
+    </ClCompile>
+    <ClCompile Include="AuthPacketHandler.cpp">
+      <Filter>PacketHandler</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -130,6 +139,12 @@
     </ClInclude>
     <ClInclude Include="MapManager.h">
       <Filter>Manager</Filter>
+    </ClInclude>
+    <ClInclude Include="DBManager.h">
+      <Filter>DBManager</Filter>
+    </ClInclude>
+    <ClInclude Include="AuthPacketHandler.h">
+      <Filter>PacketHandler</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

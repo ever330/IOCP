@@ -10,7 +10,6 @@ public:
 	~User();
 	User(unsigned int userID, std::string userName);
 
-public:
 	void SetUserID(unsigned int userID);
 	unsigned int GetUserID() const;
 

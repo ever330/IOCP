@@ -19,6 +19,8 @@
 #define REMOTE_ADDR_SIZE (sizeof(sockaddr_in) + 16)
 
 // ÆÐÅ¶¿ë
+#define ID_SIZE 20
+#define PASSWORD_SIZE 20
 #define NAME_SIZE 10
 #define MSG_SIZE 256
 

@@ -6,14 +6,16 @@
 #include "Vector3.h"
 #include "PacketDispatcher.h"
 #include "MapManager.h"
+#include "DBManager.h"
+#include "IOCP.h"
 
-class IOCP;
 class User;
 class Map;
 
 struct PacketJob 
 {
 	unsigned int userID;
+	unsigned int sessionID;
 	PacketBase* packet;
 };
 
@@ -35,31 +37,34 @@ public:
 		return s;
 	}
 
-public:
 	bool StartServer();
 	void PushData(unsigned int sessionID, char* data);
 	void StopServer();
 	void DisconnectUserBySessionID(unsigned int sessionID);
 	void DisconnectUser(unsigned int userID);
+	void SendPacket(unsigned int userID, PacketBase* packet);
 	void BroadCast(const std::unordered_set<unsigned int>& userIDs, PacketBase* packet);
-	void AddUser(std::shared_ptr<User> user);
+	void AddUser(unsigned int sessionID, std::shared_ptr<User> user);
 
 	std::shared_ptr<User> GetUserByID(unsigned int userID) const;
 
-	void Log(const std::string& message);
+	void RequestQuery(const std::string& sql, std::function<void(bool, sql::ResultSet*)> callback);
 
-	void TestSQL();
+	void Log(const std::string& message);
 
 private:
 	void PacketWorker(int index);
 	void PacketProcess(std::shared_ptr<User> user, PacketBase* pac);
+	// 유저 연결, 해제 시 처리
+	void PacketProcess(unsigned int sessionID, PacketBase* pac);
 
 	void RegisterPacketHandlers(); // 핸들러 등록 함수
 
 	void OutputServerMessages(); // 서버 메시지 출력 함수
 
-private:
-	std::shared_ptr<IOCP> m_IOCP;
+	std::unique_ptr<IOCP> m_IOCP;
+	std::unique_ptr<DBManager> m_DBManager;
+
 	mutable std::mutex m_mutex;
 	std::unordered_map<unsigned int, std::shared_ptr<User>> m_users;
 

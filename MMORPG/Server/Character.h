@@ -11,7 +11,6 @@ public:
 	~Character();
 	Character(Vector3 spawnPos);
 
-public:
 	void Update();
 	void TakeDamage(int damage);
 	void Respawn(Vector3 spawnPos);

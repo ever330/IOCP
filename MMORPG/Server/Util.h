@@ -85,3 +85,27 @@ inline AttackRect GetAttackRect(const Vector3& playerPos, Direction dir)
 
     return rect;
 }
+
+inline std::string Sha256(const std::string& str) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(str.c_str()), str.size(), hash);
+
+    char output[65]; // 64자리 해시 + 널 종료
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        sprintf_s(output + (i * 2), 3, "%02x", hash[i]);
+
+    output[64] = 0;
+    return std::string(output);
+}
+
+// SQL 인젝션 방지
+inline std::string EscapeSQL(const std::string& input) 
+{
+    std::string escaped;
+    for (char c : input) 
+    {
+        if (c == '\'') escaped += "''"; // 작은 따옴표 2개로 변환
+        else escaped += c;
+    }
+    return escaped;
+}

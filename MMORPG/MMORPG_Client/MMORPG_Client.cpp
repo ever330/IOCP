@@ -5,6 +5,7 @@
 #include "framework.h"
 #include "MMORPG_Client.h"
 #include "MMORPG_ClientDlg.h"
+#include "CLoginDialog.h"
 
 
 // 메모리 누수 테스트
@@ -75,6 +76,22 @@ BOOL CMMORPGClientApp::InitInstance()
 	// TODO: 이 문자열을 회사 또는 조직의 이름과 같은
 	// 적절한 내용으로 수정해야 합니다.
 	SetRegistryKey(_T("로컬 애플리케이션 마법사에서 생성된 애플리케이션"));
+
+	m_network = new Network();
+	if (!m_network->Connect("127.0.0.1", 3030))
+	{
+		AfxMessageBox(_T("서버 연결에 실패했습니다."));
+		return FALSE;
+	}
+
+	CLoginDialog loginDlg;
+	loginDlg.SetNetwork(m_network);
+
+	if (loginDlg.DoModal() != IDOK)
+	{
+		AfxMessageBox(_T("로그인이 취소되었습니다."));
+		return FALSE;
+	}
 
 	CMMORPGClientDlg dlg;
 	m_pMainWnd = &dlg;

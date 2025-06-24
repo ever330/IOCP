@@ -4,6 +4,17 @@
 
 enum PacketID : uint16_t
 {
+	// 서버 접속, 접속 종료
+	C2SConnect = 0,
+	S2CConnectAck,
+	C2SDisconnect,
+	C2SCheckID,
+	S2CCheckIDAck,
+	C2SLogin,
+	S2CLoginAck,
+	C2SSignUp,
+	S2CSignUpAck,
+
 	// 기존 임시용
 	C2SSetName = 100,
 	S2CNewUserAlert,
@@ -41,6 +52,55 @@ struct PacketBase
 	uint16_t PacketSize;
 	PacketID PacID;
 	char Body[];
+};
+
+struct C2SConnectPacket
+{
+};
+
+struct S2CConnectAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+};
+
+struct C2SDisconnectPacket
+{
+};
+
+struct C2SCheckIDPacket
+{
+	char ID[ID_SIZE];
+};
+
+struct S2CCheckIDAckPacket
+{
+	uint8_t Result; // 0: 사용 가능, 1: 사용 불가
+};
+
+struct C2SLoginPacket
+{
+	char ID[ID_SIZE];
+	char Password[PASSWORD_SIZE];
+};
+
+struct S2CLoginAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+	uint16_t UserID; // 로그인 성공 시 사용자 ID 반환
+	char ID[ID_SIZE]; // 로그인 성공 시 사용자 이름 반환
+};
+
+struct C2SSignUpPacket
+{
+	char ID[ID_SIZE];
+	char Password[PASSWORD_SIZE];
+};
+
+struct S2CSignUpAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+	uint16_t UserID; // 회원가입 성공 시 사용자 ID 반환
+	char ID[ID_SIZE]; // 회원가입 성공 시 사용자 이름 반환
 };
 
 struct C2SSetNamePacket
@@ -158,7 +218,7 @@ struct S2CPlayerMovePacket
 
 struct C2SPlayerAttackPacket
 {
-	uint8_t AttackDirection; 
+	uint8_t AttackDirection;
 };
 
 struct S2CPlayerAttackPacket

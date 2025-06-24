@@ -15,6 +15,8 @@ class CMMORPGClientDlg : public CDialogEx
 public:
 	CMMORPGClientDlg(CWnd* pParent = nullptr);	// 표준 생성자입니다.
 
+	void SetNetwork(Network* network) { m_network = network; }
+
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_MMORPG_CLIENT_DIALOG };
@@ -28,7 +30,7 @@ public:
 protected:
 	HICON m_hIcon;
 
-	Network m_network;
+	Network* m_network;
 
 	CString m_strUserNickname;
 

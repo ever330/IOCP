@@ -6,7 +6,6 @@
 #include "MMORPG_Client.h"
 #include "MMORPG_ClientDlg.h"
 #include "afxdialogex.h"
-#include "CNicknameDialog.h"
 #include "Resource.h"
 
 #ifdef _DEBUG
@@ -79,26 +78,26 @@ BOOL CMMORPGClientDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 
-	CNicknameDialog dlg;
-	if (dlg.DoModal() == IDOK)
-	{
-		m_strUserNickname = dlg.m_strNickname; // 닉네임 저장
-		AfxMessageBox(L"닉네임 설정 완료: " + m_strUserNickname);
+	//CNicknameDialog dlg;
+	//if (dlg.DoModal() == IDOK)
+	//{
+	//	m_strUserNickname = dlg.m_strNickname; // 닉네임 저장
+	//	AfxMessageBox(L"닉네임 설정 완료: " + m_strUserNickname);
 
-		if (m_network.Connect("127.0.0.1", 3030))
-		{
-			CT2A asciiConverter(m_strUserNickname);
-			std::string userNickname(asciiConverter);
+	//	if (m_network.Connect("127.0.0.1", 3030))
+	//	{
+	//		CT2A asciiConverter(m_strUserNickname);
+	//		std::string userNickname(asciiConverter);
 
-			m_network.SetName(userNickname);
-		}
-	}
-	else
-	{
-		AfxMessageBox(L"닉네임 입력 취소됨. 종료합니다.");
-		EndDialog(IDCANCEL);
-		return FALSE;
-	}
+	//		m_network.SetName(userNickname);
+	//	}
+	//}
+	//else
+	//{
+	//	AfxMessageBox(L"닉네임 입력 취소됨. 종료합니다.");
+	//	EndDialog(IDCANCEL);
+	//	return FALSE;
+	//}
 
 	SetChatIO();
 	SetMapList();
@@ -106,7 +105,7 @@ BOOL CMMORPGClientDlg::OnInitDialog()
 	SetCallback();
 	m_userNicknameStatic.SubclassDlgItem(IDC_NICKNAME, this);
 	m_userNicknameStatic.SetWindowText(m_strUserNickname);
-	m_testView->SetNetwork(&m_network);
+	m_testView->SetNetwork(m_network);
 	m_testView->SetUserNickname(m_strUserNickname);
 
 	// IDM_ABOUTBOX는 시스템 명령 범위에 있어야 합니다.
@@ -200,7 +199,7 @@ void CMMORPGClientDlg::OnSendButtonClicked()
 	CT2A asciiConverter(strInput);
 	std::string stdInput(asciiConverter);
 
-	m_network.SendChat(stdInput);
+	m_network->SendChat(stdInput);
 
 	// Clear the input box  
 	m_chatInput.SetWindowText(L"");
@@ -233,7 +232,7 @@ void CMMORPGClientDlg::OnMoveButtonClicked()
 	msg.Format(L"선택된 맵: %s (맵 ID: %u)", (LPCTSTR)selectedMap, mapID);
 	AfxMessageBox(msg);
 
-	m_network.ChangeMap(mapID);
+	m_network->ChangeMap(mapID);
 }
 
 BOOL CMMORPGClientDlg::PreTranslateMessage(MSG* pMsg)
@@ -319,12 +318,12 @@ void CMMORPGClientDlg::SetGameView()
 
 void CMMORPGClientDlg::SetCallback()
 {
-	m_network.SetMessageCallback([this](const std::string& message) {
+	m_network->SetMessageCallback([this](const std::string& message) {
 		CString cstrMessage(message.c_str());
 		AddChatMessage(cstrMessage);
 		});
 
-	m_network.SetMapChangeCallback([this](uint16_t mapID, float x, float y) {
+	m_network->SetMapChangeCallback([this](uint16_t mapID, float x, float y) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			::SendMessage(m_testView->GetSafeHwnd(), WM_MAP_CHANGE, x, y);
@@ -354,7 +353,7 @@ void CMMORPGClientDlg::SetCallback()
 		AddChatMessage(msg);
 		});
 
-	m_network.SetMonsterInfoCallback([this](const std::vector<S2CMonsterStateInfo>& monsters) {
+	m_network->SetMonsterInfoCallback([this](const std::vector<S2CMonsterStateInfo>& monsters) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			auto* pCopy = new std::vector<S2CMonsterStateInfo>(monsters);
@@ -362,7 +361,7 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network.SetPlayerEnterCallback([this](uint16_t userID, const char* name, float x, float y) {
+	m_network->SetPlayerEnterCallback([this](uint16_t userID, const char* name, float x, float y) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			Vector3 position{ x, y, 0.0f };
@@ -371,14 +370,14 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network.SetPlayerLeaveCallback([this](uint16_t userID) {
+	m_network->SetPlayerLeaveCallback([this](uint16_t userID) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_LEAVE, static_cast<WPARAM>(userID), 0);
 		}
 		});
 
-	m_network.SetPlayerInfoCallback([this](const std::vector<S2CPlayerStateInfo>& users) {
+	m_network->SetPlayerInfoCallback([this](const std::vector<S2CPlayerStateInfo>& users) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			auto* pCopy = new std::vector<S2CPlayerStateInfo>(users);
@@ -386,7 +385,7 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network.SetMonsterHitInfoCallback([this](const std::vector<S2CMonsterHitInfo>& monsters) {
+	m_network->SetMonsterHitInfoCallback([this](const std::vector<S2CMonsterHitInfo>& monsters) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			auto* pCopy = new std::vector<S2CMonsterHitInfo>(monsters);
@@ -394,7 +393,7 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network.SetMonsterRespawnCallback([this](const std::vector<S2CMonsterRespawnInfo>& monsters) {
+	m_network->SetMonsterRespawnCallback([this](const std::vector<S2CMonsterRespawnInfo>& monsters) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			auto* pCopy = new std::vector<S2CMonsterRespawnInfo>(monsters);
@@ -402,7 +401,7 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network.SetPlayerAttackCallback([this](uint16_t userID, Direction dir) {
+	m_network->SetPlayerAttackCallback([this](uint16_t userID, Direction dir) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
 			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_ATTACK, static_cast<WPARAM>(userID), static_cast<LPARAM>(dir));
@@ -412,13 +411,11 @@ void CMMORPGClientDlg::SetCallback()
 
 void CMMORPGClientDlg::OnClose()
 {
-	m_network.SetMessageCallback(nullptr);
-	m_network.SetMapChangeCallback(nullptr);
-	m_network.SetMonsterInfoCallback(nullptr);
-	m_network.SetPlayerEnterCallback(nullptr);
-	m_network.SetPlayerLeaveCallback(nullptr);
-
-	m_network.Disconnect();
+	m_network->SetMessageCallback(nullptr);
+	m_network->SetMapChangeCallback(nullptr);
+	m_network->SetMonsterInfoCallback(nullptr);
+	m_network->SetPlayerEnterCallback(nullptr);
+	m_network->SetPlayerLeaveCallback(nullptr);
 
 	CDialogEx::OnClose();
 }
@@ -428,13 +425,11 @@ void CMMORPGClientDlg::OnCancel()
 	// 네트워크 콜백 해제 및 연결 종료를 예외 안전하게 처리
 	try
 	{
-		m_network.SetMessageCallback(nullptr);
-		m_network.SetMapChangeCallback(nullptr);
-		m_network.SetMonsterInfoCallback(nullptr);
-		m_network.SetPlayerEnterCallback(nullptr);
-		m_network.SetPlayerLeaveCallback(nullptr);
-
-		m_network.Disconnect();
+		m_network->SetMessageCallback(nullptr);
+		m_network->SetMapChangeCallback(nullptr);
+		m_network->SetMonsterInfoCallback(nullptr);
+		m_network->SetPlayerEnterCallback(nullptr);
+		m_network->SetPlayerLeaveCallback(nullptr);
 	}
 	catch (...)
 	{

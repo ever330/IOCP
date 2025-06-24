@@ -1,10 +1,10 @@
 #include "MapPacketHandler.h"
 #include "IOCP.h"
+#include "MainServer.h"
 
-MapPacketHandler::MapPacketHandler(std::shared_ptr<IOCP> iocp,
-    MapManager& mapManager,
+MapPacketHandler::MapPacketHandler(MapManager& mapManager,
     std::unordered_map<unsigned int, unsigned int>& userToSessionMap)
-    : m_IOCP(iocp), m_mapManager(mapManager), m_userToSessionMap(userToSessionMap)
+    : m_mapManager(mapManager), m_userToSessionMap(userToSessionMap)
 {
 }
 
@@ -25,12 +25,12 @@ void MapPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* packet)
 	}
 }
 
-void MapPacketHandler::HandleChangeMap(std::shared_ptr<User> user, PacketBase* packet)
+void MapPacketHandler::HandleChangeMap(std::shared_ptr<User> user, PacketBase* pac)
 {
     C2SChangeMapPacket changeMap;
-    memcpy(&changeMap, packet->Body, packet->PacketSize - sizeof(PacketBase));
+    memcpy(&changeMap, pac->Body, pac->PacketSize - sizeof(PacketBase));
 
-    unsigned int currentMapID = user.get()->GetCurrentMapID();
+    unsigned int currentMapID = user->GetCurrentMapID();
     auto oldMap = m_mapManager.GetMap(currentMapID);
     if (oldMap != nullptr)
     {
@@ -42,8 +42,8 @@ void MapPacketHandler::HandleChangeMap(std::shared_ptr<User> user, PacketBase* p
     if (newMap != nullptr)
     {
         newMap->AddUser(user);
-        user.get()->SetCurrentMapID(changeMap.MapID);
-        user.get()->GetCharacter().Respawn(newMap->GetUserSpawnPos());
+        user->SetCurrentMapID(changeMap.MapID);
+        user->GetCharacter().Respawn(newMap->GetUserSpawnPos());
 
         ack.Result = 1;
         ack.MapID = changeMap.MapID;
@@ -69,8 +69,7 @@ void MapPacketHandler::HandleChangeMap(std::shared_ptr<User> user, PacketBase* p
     newPac->PacketSize = packetSize;
     memcpy(newPac->Body, &ack, sizeof(S2CChangeMapAckPacket));
 
-    unsigned int sessionID = m_userToSessionMap[user.get()->GetUserID()];
-    m_IOCP->SendPacket(sessionID, buffer, newPac->PacketSize);
+	MainServer::Instance().SendPacket(user->GetUserID(), newPac);
 }
 
 void MapPacketHandler::HandlePlayerAttack(std::shared_ptr<User> user, PacketBase* packet)
@@ -78,7 +77,7 @@ void MapPacketHandler::HandlePlayerAttack(std::shared_ptr<User> user, PacketBase
 	C2SPlayerAttackPacket attackPacket;
 	memcpy(&attackPacket, packet->Body, packet->PacketSize - sizeof(PacketBase));
 
-    unsigned int currentMapID = user.get()->GetCurrentMapID();
+    unsigned int currentMapID = user->GetCurrentMapID();
     auto currentMap = m_mapManager.GetMap(currentMapID);
 
     if (currentMap != nullptr)

@@ -9,6 +9,7 @@
 #endif
 
 #include "resource.h"		// 주 기호입니다.
+#include "Network.h"
 
 
 // CMMORPGClientApp:
@@ -27,6 +28,9 @@ public:
 // 구현입니다.
 
 	DECLARE_MESSAGE_MAP()
+
+private:
+	Network* m_network;
 };
 
 extern CMMORPGClientApp theApp;

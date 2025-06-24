@@ -20,6 +20,7 @@ public:
 	using MonsterHitInfoHandler = std::function<void(const std::vector<S2CMonsterHitInfo>&)>;
 	using MonsterRespawnHandler = std::function<void(const std::vector<S2CMonsterRespawnInfo>&)>;
 	using PlayerAttackHandler = std::function<void(const uint16_t, Direction)>;
+    using CheckIDResultHandler = std::function<void(uint8_t)>;
 
     Network();
     ~Network();
@@ -27,12 +28,14 @@ public:
     bool Connect(const std::string& ip, int port);
     void Disconnect();
 
+    void IDCheck(const std::string& name);
     void SetName(const std::string& name);
     void SendChat(const std::string& msg);
     void ChangeMap(unsigned int mapID);
     void PlayerMove(Direction dir);
 	void PlayerAttack(Direction dir);
 
+	void SetCheckIDResultCallback(CheckIDResultHandler handler);
     void SetMessageCallback(MessageHandler handler);
     void SetMapChangeCallback(MapChangeHandler handler);
     void SetMonsterInfoCallback(MonsterStateInfoHandler handler);
@@ -54,6 +57,7 @@ private:
 
     std::mutex m_mutex;
 
+	CheckIDResultHandler m_checkIDResultHandler;
     MessageHandler m_messageHandler;
     MapChangeHandler m_mapChangeHandler;
     MonsterStateInfoHandler m_monsterInfoHandler;

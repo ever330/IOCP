@@ -12,7 +12,6 @@ public:
 	Monster(int id, Vector3 spawnPos);
 	~Monster();
 
-public:
 	void Update(const std::unordered_set<unsigned int> mapUsers);
 	void TakeDamage(Direction dir, int damage, int knockbackDistance);
 	void Respawn(Vector3 spawnPos);
@@ -27,7 +26,6 @@ private:
 	std::shared_ptr<User> FindClosetUser(const std::unordered_set<unsigned int> mapUsers);
 	void FreeWalk();
 
-private:
 	int m_id;
 	int m_maxHP;
 	int m_curHP;

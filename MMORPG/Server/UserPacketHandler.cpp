@@ -3,21 +3,20 @@
 #include "User.h"
 #include "MainServer.h"
 
-UserPacketHandler::UserPacketHandler(std::shared_ptr<IOCP> iocp)
-	: m_IOCP(iocp)
+UserPacketHandler::UserPacketHandler()
 {
 }
 
 bool UserPacketHandler::CanHandle(int packetID) const
 {
-	return packetID == C2SSetName || packetID == C2SPlayerMove;
+	return packetID == C2SConnect || packetID == C2SDisconnect || packetID == C2SSetName || packetID == C2SPlayerMove;
 }
 
 void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 {
-	if (pac->PacID == C2SConnect)
+	if (pac->PacID == C2SDisconnect)
 	{
-		HandleUserConnect(user, pac);
+		HandleUserDisconnect(user, pac);
 	}
 	else if (pac->PacID == C2SSetName)
 	{
@@ -29,14 +28,22 @@ void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 	}
 }
 
-void UserPacketHandler::HandleUserConnect(std::shared_ptr<User> dummyUser, PacketBase* pac)
+void UserPacketHandler::Handle(unsigned int sessionID, PacketBase* pac)
+{
+	if (pac->PacID == C2SConnect)
+	{
+		HandleUserConnect(sessionID, pac);
+	}
+}
+
+void UserPacketHandler::HandleUserConnect(unsigned int sessionID, PacketBase* pac)
 {
 	auto userId = m_userID;
 	auto user = std::make_shared<User>(userId, "");
 
 	m_userID++;
 
-	MainServer::Instance().AddUser(user);
+	MainServer::Instance().AddUser(sessionID, user);
 }
 
 void UserPacketHandler::HandleUserDisconnect(std::shared_ptr<User> user, PacketBase* pac)
@@ -60,8 +67,6 @@ void UserPacketHandler::HandleSetName(std::shared_ptr<User> user, PacketBase* pa
 	newPac->PacID = S2CNewUserAlert;
 	newPac->PacketSize = packetSize;
 	memcpy(newPac->Body, &setName, packetSize - sizeof(PacketBase));
-
-	//m_IOCP->BroadCast(buffer, packetSize);
 }
 
 void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase* pac)
@@ -82,6 +87,4 @@ void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase*
 	newPac->PacID = S2CPlayerMove;
 	newPac->PacketSize = packetSize;
 	memcpy(newPac->Body, &response, sizeof(response));
-
-	//m_IOCP->BroadCast(buffer, packetSize);
 }

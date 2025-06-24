@@ -11,6 +11,8 @@ public:
     void RegisterHandler(std::unique_ptr<IPacketHandler> handler);
     bool DispatchPacket(std::shared_ptr<User> user, PacketBase* packet);
 
+    bool DispatchPacket(unsigned int sessionID, PacketBase* packet);
+
 private:
     std::vector<std::unique_ptr<IPacketHandler>> m_handlers;
 };

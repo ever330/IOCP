@@ -45,7 +45,6 @@ private:
 	void HeartBeatThread();
 	void SendHeartBeat(unsigned int sessionID);
 
-private:
     HANDLE m_hIocp;
     std::shared_ptr<Session> m_serverSession;
     std::vector<std::thread> m_workerThreads;

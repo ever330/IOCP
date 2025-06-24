@@ -6,15 +6,13 @@
 
 class User;
 class Monster;
-class IOCP;
 
 class Map
 {
 public:
-	Map(int id, std::shared_ptr<IOCP> iocp);
+	Map(int id);
 	~Map();
 
-public:
 	void Initialize();
 	void Update();
 
@@ -32,9 +30,7 @@ private:
 	void MonsterStateUpdate();
 	void PlayerStateUpdate();
 
-private:
 	unsigned int m_id;
-	std::shared_ptr<IOCP> m_IOCP;
 	std::unordered_set<unsigned int> m_users;
 	std::unordered_map<unsigned int, std::shared_ptr<Monster>> m_monsters;
 	Vector3 m_userSpawnPos;

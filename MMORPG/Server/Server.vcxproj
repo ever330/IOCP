@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -105,13 +105,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\mysql_connector_cpp\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\mysql_connector_cpp\include;C:\Program Files\OpenSSL-Win64\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\mysql_connector_cpp\lib64\vs14</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mysqlcppconn.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\mysql_connector_cpp\lib64\vs14;C:\Program Files\OpenSSL-Win64\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>mysqlcppconn.lib;libssl.lib;libcrypto.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,7 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\mysql_connector_cpp\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\mysql_connector_cpp\include;C:\Program Files\OpenSSL-Win64\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -130,13 +130,15 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\mysql_connector_cpp\lib64\vs14</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mysqlcppconn.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\mysql_connector_cpp\lib64\vs14;C:\Program Files\OpenSSL-Win64\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>mysqlcppconn.lib;libssl.lib;libcrypto.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AuthPacketHandler.cpp" />
     <ClCompile Include="Character.cpp" />
     <ClCompile Include="ChatPacketHandler.cpp" />
+    <ClCompile Include="DBManager.cpp" />
     <ClCompile Include="IOCP.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainServer.cpp" />
@@ -149,8 +151,10 @@
     <ClCompile Include="UserPacketHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AuthPacketHandler.h" />
     <ClInclude Include="Character.h" />
     <ClInclude Include="ChatPacketHandler.h" />
+    <ClInclude Include="DBManager.h" />
     <ClInclude Include="Define.h" />
     <ClInclude Include="IOCP.h" />
     <ClInclude Include="MainServer.h" />

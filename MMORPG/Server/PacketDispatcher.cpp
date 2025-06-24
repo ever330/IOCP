@@ -18,3 +18,16 @@ bool PacketDispatcher::DispatchPacket(std::shared_ptr<User> user, PacketBase* pa
 	}
 	return false;
 }
+
+bool PacketDispatcher::DispatchPacket(unsigned int sessionId, PacketBase* packet)
+{
+	for (const auto& handler : m_handlers)
+	{
+		if (handler->CanHandle(packet->PacID))
+		{
+			handler->Handle(sessionId, packet);
+			return true;
+		}
+	}
+	return false;
+}

@@ -1,11 +1,10 @@
 #include "Map.h"
 #include "User.h"
 #include "Monster.h"
-#include "IOCP.h"
 #include "MainServer.h"
 
-Map::Map(int id, std::shared_ptr<IOCP> iocp)
-	: m_id(id), m_IOCP(iocp), m_responseCount(0)
+Map::Map(int id)
+	: m_id(id), m_responseCount(0)
 {
 }
 

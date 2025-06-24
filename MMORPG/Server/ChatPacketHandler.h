@@ -11,13 +11,12 @@ class IOCP;
 class ChatPacketHandler : public IPacketHandler
 {
 public:
-    ChatPacketHandler(std::shared_ptr<IOCP> iocp, MapManager& mapManager);
+    ChatPacketHandler(MapManager& mapManager);
 
     bool CanHandle(int packetID) const override;
 
-    void Handle(std::shared_ptr<User> user, PacketBase* packet) override;
+    void Handle(std::shared_ptr<User> user, PacketBase* pac) override;
 
 private:
-    std::shared_ptr<IOCP> m_IOCP;
 	MapManager& m_mapManager;
 };

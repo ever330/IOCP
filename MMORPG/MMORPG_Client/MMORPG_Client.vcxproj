@@ -184,6 +184,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CChatInputEdit.h" />
+    <ClInclude Include="CLoginDialog.h" />
+    <ClInclude Include="CSignUpDialog.h" />
     <ClInclude Include="Monster.h" />
     <ClInclude Include="OtherPlayer.h" />
     <ClInclude Include="CNicknameDialog.h" />
@@ -203,7 +205,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CChatInputEdit.cpp" />
+    <ClCompile Include="CLoginDialog.cpp" />
     <ClCompile Include="CNicknameDialog.cpp" />
+    <ClCompile Include="CSignUpDialog.cpp" />
     <ClCompile Include="CTestView.cpp" />
     <ClCompile Include="MMORPG_Client.cpp" />
     <ClCompile Include="MMORPG_ClientDlg.cpp" />

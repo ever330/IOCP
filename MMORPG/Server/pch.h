@@ -32,6 +32,9 @@
 // DB
 #include <mysql/jdbc.h>
 
+// 암호화용
+#include <openssl/sha.h>
+
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "odbc32.lib")
 #pragma comment(lib, "Mswsock.lib")
