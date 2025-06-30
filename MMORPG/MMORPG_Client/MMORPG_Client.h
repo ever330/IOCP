@@ -10,6 +10,7 @@
 
 #include "resource.h"		// 주 기호입니다.
 #include "Network.h"
+#include "User.h"
 
 
 // CMMORPGClientApp:
@@ -31,6 +32,7 @@ public:
 
 private:
 	Network* m_network;
+	User* m_user;
 };
 
 extern CMMORPGClientApp theApp;

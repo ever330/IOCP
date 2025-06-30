@@ -4,10 +4,6 @@
 
 enum PacketID : uint16_t
 {
-	// 서버 접속, 접속 종료
-	C2SConnect = 0,
-	S2CConnectAck,
-	C2SDisconnect,
 	C2SCheckID,
 	S2CCheckIDAck,
 	C2SLogin,
@@ -40,6 +36,8 @@ enum PacketID : uint16_t
 	// 플레이어 관련
 	C2SPlayerMove = 500,
 	S2CPlayerMove,
+	C2SPlayerStop,
+	S2CPlayerPosSync,
 	C2SPlayerAttack,
 	S2CPlayerAttack,
 	C2SPlayerChat,
@@ -99,8 +97,6 @@ struct C2SSignUpPacket
 struct S2CSignUpAckPacket
 {
 	uint8_t Result; // 0: 성공, 1: 실패
-	uint16_t UserID; // 회원가입 성공 시 사용자 ID 반환
-	char ID[ID_SIZE]; // 회원가입 성공 시 사용자 이름 반환
 };
 
 struct C2SSetNamePacket
@@ -167,6 +163,8 @@ struct S2CPlayerStateInfo
 	float PosX;
 	float PosY;
 	float PosZ;
+
+	uint8_t Direction;
 };
 
 struct S2CMonsterRespawnPacket
@@ -207,14 +205,28 @@ struct S2CMonsterStateInfo
 
 struct C2SPlayerMovePacket
 {
-	uint8_t MoveDirection; // 0: LEFT, 1: RIGHT, 2: UP, 3: DOWN
+	uint8_t MoveDirection; // 0: 상, 1: 하, 2: 좌, 3: 우
+	uint32_t FrameID;
 };
 
 struct S2CPlayerMovePacket
 {
-	char Name[NAME_SIZE];
+	uint16_t UserID;
 	uint8_t MoveDirection;
 };
+
+struct C2SPlayerStopPacket
+{
+	uint32_t FrameID;
+};
+
+struct S2CPlayerPosSyncPacket
+{
+	float PosX;
+	float PosY;
+	float PosZ;
+	uint32_t AckFrameID;
+};;
 
 struct C2SPlayerAttackPacket
 {

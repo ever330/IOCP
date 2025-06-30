@@ -84,8 +84,11 @@ BOOL CMMORPGClientApp::InitInstance()
 		return FALSE;
 	}
 
+	m_user = new User();
+
 	CLoginDialog loginDlg;
 	loginDlg.SetNetwork(m_network);
+	loginDlg.SetUser(m_user);
 
 	if (loginDlg.DoModal() != IDOK)
 	{
@@ -94,6 +97,8 @@ BOOL CMMORPGClientApp::InitInstance()
 	}
 
 	CMMORPGClientDlg dlg;
+	dlg.SetNetwork(m_network);
+	dlg.SetUser(m_user);
 	m_pMainWnd = &dlg;
 	INT_PTR nResponse = dlg.DoModal();
 	if (nResponse == IDOK)

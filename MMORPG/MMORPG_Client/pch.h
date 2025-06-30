@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+#include <deque>
 
 
 #endif //PCH_H

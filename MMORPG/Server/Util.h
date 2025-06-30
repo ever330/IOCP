@@ -26,10 +26,10 @@ inline int ManhattanDistance(const Vector3& a, const Vector3& b)
 
 enum class Direction : uint8_t
 {
-    Left = 0,
-    Right = 1,
-    Up = 2,
-    Down = 3
+    Up = 0,
+    Down = 1,
+    Left = 2,
+    Right = 3
 };
 
 struct AttackRect

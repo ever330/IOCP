@@ -1,5 +1,4 @@
 #include "ChatPacketHandler.h"
-#include "IOCP.h"
 #include "MainServer.h" 
 
 ChatPacketHandler::ChatPacketHandler(MapManager& mapManager)
@@ -7,7 +6,7 @@ ChatPacketHandler::ChatPacketHandler(MapManager& mapManager)
 {
 }
 
-bool ChatPacketHandler::CanHandle(int packetID) const
+bool ChatPacketHandler::CanHandle(uint16_t packetID) const
 {
     return packetID == C2SPlayerChat;
 }

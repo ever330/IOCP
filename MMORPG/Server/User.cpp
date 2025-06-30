@@ -1,6 +1,6 @@
 #include "User.h"
 
-User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_character({ 0.0f, 0.0f, 0.0f }), m_isConnected(false)
+User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_character({ 0.0f, 0.0f, 0.0f }), m_isConnected(false), m_lastInputFrame(0)
 {
 
 }
@@ -53,4 +53,14 @@ void User::SetConnected(bool isConnected)
 bool User::IsConnected() const
 {
 	return m_isConnected;
+}
+
+void User::SetLastInputFrame(unsigned int frame)
+{
+	m_lastInputFrame = frame;
+}
+
+unsigned int User::GetLastInputFrame() const
+{
+	return m_lastInputFrame;
 }

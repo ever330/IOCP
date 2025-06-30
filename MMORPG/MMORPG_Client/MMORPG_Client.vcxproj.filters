@@ -13,12 +13,21 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Dialog">
+      <UniqueIdentifier>{24c33e46-c82f-4f5a-b325-f70c13171def}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="View">
+      <UniqueIdentifier>{bbb16479-1da3-442b-bf1b-5c370bd285c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{a0015295-42d2-46b5-a858-1c325b886698}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Edit">
+      <UniqueIdentifier>{f502c29d-53ef-4abf-8ea6-947e6917672d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MMORPG_Client.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="MMORPG_ClientDlg.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="framework.h">
@@ -42,18 +51,6 @@
     <ClInclude Include="Ringbuffer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="CNicknameDialog.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Network.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CChatInputEdit.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CTestView.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="OtherPlayer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -67,9 +64,27 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="CLoginDialog.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Dialog</Filter>
+    </ClInclude>
+    <ClInclude Include="CNicknameDialog.h">
+      <Filter>Dialog</Filter>
     </ClInclude>
     <ClInclude Include="CSignUpDialog.h">
+      <Filter>Dialog</Filter>
+    </ClInclude>
+    <ClInclude Include="MMORPG_ClientDlg.h">
+      <Filter>Dialog</Filter>
+    </ClInclude>
+    <ClInclude Include="CTestView.h">
+      <Filter>View</Filter>
+    </ClInclude>
+    <ClInclude Include="Network.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="CChatInputEdit.h">
+      <Filter>Edit</Filter>
+    </ClInclude>
+    <ClInclude Include="User.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -77,32 +92,32 @@
     <ClCompile Include="MMORPG_Client.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="MMORPG_ClientDlg.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="pch.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="CNicknameDialog.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Network.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="CChatInputEdit.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="CTestView.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Monster.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="CLoginDialog.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Dialog</Filter>
+    </ClCompile>
+    <ClCompile Include="CNicknameDialog.cpp">
+      <Filter>Dialog</Filter>
     </ClCompile>
     <ClCompile Include="CSignUpDialog.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Dialog</Filter>
+    </ClCompile>
+    <ClCompile Include="MMORPG_ClientDlg.cpp">
+      <Filter>Dialog</Filter>
+    </ClCompile>
+    <ClCompile Include="CTestView.cpp">
+      <Filter>View</Filter>
+    </ClCompile>
+    <ClCompile Include="Network.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="CChatInputEdit.cpp">
+      <Filter>Edit</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

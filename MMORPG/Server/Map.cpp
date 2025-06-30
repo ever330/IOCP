@@ -26,16 +26,30 @@ void Map::Initialize()
 	m_userSpawnPos.y = 100.0f;
 }
 
-void Map::Update()
+void Map::Update(float deltaTime, int tickCount)
 {
+	// 유저 업데이트
+	for (int userID : m_users) {
+		std::shared_ptr<User> user = MainServer::Instance().GetUserByID(userID);
+
+		if (!user)
+			continue;
+
+		user->GetCharacter().Update(deltaTime); // 방향에 따라 좌표 이동
+	}
+
 	// 몬스터 업데이트
 	for (auto& monster : m_monsters)
 	{
 		monster.second->Update(m_users);
 	}
 
+	// 10틱마다 유저 좌표 상태 브로드캐스트
+	if (tickCount % 10 == 0) {
+		PlayerStateUpdate();  // 유저 좌표 상태 전체 브로드캐스트
+	}
+
 	MonsterStateUpdate();
-	PlayerStateUpdate();
 
 	if (m_responseCount >= SPAWN_COUNT)
 	{
@@ -273,35 +287,36 @@ void Map::MonsterStateUpdate()
 
 void Map::PlayerStateUpdate()
 {
-	std::scoped_lock lock(m_mutex);
 	std::vector<S2CPlayerStateInfo> playerStates;
-	for (int userID : m_users)
+	playerStates.reserve(m_users.size());
+
 	{
-		std::shared_ptr<User> user = MainServer::Instance().GetUserByID(userID);
-		if (!user)
-			continue;
+		std::scoped_lock lock(m_mutex);
+		for (int userID : m_users) {
+			std::shared_ptr<User> user = MainServer::Instance().GetUserByID(userID);
+			if (!user)
+				continue;
 
-		S2CPlayerStateInfo info;
-		info.UserID = userID;
-		memcpy(info.Name, user->GetUserName().c_str(), sizeof(info.Name));
-		const auto& pos = user->GetCharacter().GetPosition();
-		info.PosX = pos.x;
-		info.PosY = pos.y;
-		info.PosZ = pos.z;
+			S2CPlayerStateInfo info{};
+			info.UserID = userID;
+			strncpy_s(info.Name, sizeof(info.Name), user->GetUserName().c_str(), _TRUNCATE);
+			auto pos = user->GetCharacter().GetPosition();
+			info.PosX = pos.x;
+			info.PosY = pos.y;
+			info.PosZ = pos.z;
+			info.Direction = user->GetCharacter().GetDirection();
 
-		playerStates.push_back(info);
+			playerStates.push_back(info);
+		}
 	}
 
 	if (playerStates.empty())
 		return;
 
 	const uint16_t playerCount = static_cast<uint16_t>(playerStates.size());
-	const uint16_t packetSize = sizeof(PacketBase)
-		+ sizeof(S2CPlayerStatePacket)
-		+ sizeof(S2CPlayerStateInfo) * playerCount;
+	const uint16_t packetSize = sizeof(PacketBase) + sizeof(S2CPlayerStatePacket) + sizeof(S2CPlayerStateInfo) * playerCount;
 
 	std::shared_ptr<char[]> buffer(new char[packetSize]);
-
 	PacketBase* packet = reinterpret_cast<PacketBase*>(buffer.get());
 	packet->PacketSize = packetSize;
 	packet->PacID = S2CPlayerState;

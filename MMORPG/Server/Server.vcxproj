@@ -147,6 +147,7 @@
     <ClCompile Include="MapPacketHandler.cpp" />
     <ClCompile Include="Monster.cpp" />
     <ClCompile Include="PacketDispatcher.cpp" />
+    <ClCompile Include="RedisManager.cpp" />
     <ClCompile Include="User.cpp" />
     <ClCompile Include="UserPacketHandler.cpp" />
   </ItemGroup>
@@ -166,6 +167,7 @@
     <ClInclude Include="IPacketHandler.h" />
     <ClInclude Include="PacketDispatcher.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="RedisManager.h" />
     <ClInclude Include="User.h" />
     <ClInclude Include="UserPacketHandler.h" />
     <ClInclude Include="Util.h" />

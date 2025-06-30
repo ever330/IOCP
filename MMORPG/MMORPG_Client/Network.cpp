@@ -34,27 +34,11 @@ bool Network::Connect(const std::string& ip, int port)
 	m_isRunning = true;
 	m_recvThread = std::thread(&Network::RecvLoop, this);
 
-	PacketBase pac;
-	pac.PacID = C2SConnect;
-	pac.PacketSize = sizeof(PacketBase);
-	char* buffer = new char[pac.PacketSize];
-	memcpy(buffer, &pac, sizeof(pac));
-	send(m_socket, buffer, pac.PacketSize, 0);
-	delete[] buffer;
-
 	return true;
 }
 
 void Network::Disconnect()
 {
-	PacketBase pac;
-	pac.PacID = C2SDisconnect;
-	pac.PacketSize = sizeof(PacketBase);
-	char* buffer = new char[pac.PacketSize];
-	memcpy(buffer, &pac, sizeof(pac));
-	send(m_socket, buffer, pac.PacketSize, 0);
-	delete[] buffer;
-
 	if (m_socket != INVALID_SOCKET)
 	{
 		shutdown(m_socket, SD_BOTH);
@@ -77,6 +61,36 @@ void Network::IDCheck(const std::string& name)
 	char* buffer = new char[pac.PacketSize];
 	memcpy(buffer, &pac, sizeof(pac));
 	memcpy(buffer + sizeof(pac), &idCheck, sizeof(idCheck));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::SignUp(const std::string& name, const std::string& password)
+{
+	C2SSignUpPacket signUp;
+	strcpy(signUp.ID, name.c_str());
+	strcpy(signUp.Password, password.c_str());
+	PacketBase pac;
+	pac.PacID = C2SSignUp;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(signUp);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &signUp, sizeof(signUp));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::Login(const std::string& name, const std::string& password)
+{
+	C2SLoginPacket loginPacket;
+	strcpy(loginPacket.ID, name.c_str());
+	strcpy(loginPacket.Password, password.c_str());
+	PacketBase pac;
+	pac.PacID = C2SLogin;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(loginPacket);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &loginPacket, sizeof(loginPacket));
 	send(m_socket, buffer, pac.PacketSize, 0);
 	delete[] buffer;
 }
@@ -132,10 +146,11 @@ void Network::ChangeMap(unsigned int mapID)
 	delete[] buffer;
 }
 
-void Network::PlayerMove(Direction dir)
+void Network::PlayerMove(Direction dir, uint32_t frameID)
 {
 	C2SPlayerMovePacket playerMove;
 	playerMove.MoveDirection = (uint8_t)dir;
+	playerMove.FrameID = frameID;
 
 	PacketBase pac;
 	pac.PacID = C2SPlayerMove;
@@ -145,6 +160,20 @@ void Network::PlayerMove(Direction dir)
 	memcpy(buffer, &pac, sizeof(pac));
 	memcpy(buffer + sizeof(pac), &playerMove, sizeof(playerMove));
 
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::PlayerStop(uint32_t frameID)
+{
+	C2SPlayerStopPacket playerStop;
+	playerStop.FrameID = frameID;
+	PacketBase pac;
+	pac.PacID = C2SPlayerStop;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(playerStop);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &playerStop, sizeof(playerStop));
 	send(m_socket, buffer, pac.PacketSize, 0);
 	delete[] buffer;
 }
@@ -207,6 +236,21 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 
 		if (m_checkIDResultHandler)
 			m_checkIDResultHandler(ack.Result);
+	}
+	else if (pac->PacID == S2CSignUpAck)
+	{
+		S2CSignUpAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+
+		if (m_signUpResultHandler)
+			m_signUpResultHandler(ack.Result);
+	}
+	else if (pac->PacID == S2CLoginAck)
+	{
+		S2CLoginAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+		if (m_loginResultHandler)
+			m_loginResultHandler(ack.Result, ack.UserID, ack.ID);
 	}
 	else if (pac->PacID == S2CPlayerChat)
 	{
@@ -274,6 +318,18 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 		if (m_playerInfoHandler)
 			m_playerInfoHandler(users);
 	}
+	else if (pac->PacID == S2CPlayerMove)
+	{
+		const S2CPlayerMovePacket* moveInfo = reinterpret_cast<const S2CPlayerMovePacket*>(body);
+		if (m_playerMoveHandler)
+			m_playerMoveHandler(moveInfo->UserID, (Direction)moveInfo->MoveDirection);
+	}
+	else if (pac->PacID == S2CPlayerPosSync)
+	{
+		const S2CPlayerPosSyncPacket* posSyncInfo = reinterpret_cast<const S2CPlayerPosSyncPacket*>(body);
+		if (m_playerPosSyncHandler)
+			m_playerPosSyncHandler(posSyncInfo->PosX, posSyncInfo->PosY, posSyncInfo->PosZ, posSyncInfo->AckFrameID);
+	}
 	else if (pac->PacID == S2CMonsterHit)
 	{
 		const S2CMonsterHitPacket* hitInfo = reinterpret_cast<const S2CMonsterHitPacket*>(body);
@@ -339,6 +395,16 @@ void Network::SetCheckIDResultCallback(CheckIDResultHandler handler)
 	m_checkIDResultHandler = handler;
 }
 
+void Network::SetSignUpResultCallback(SignUpResultHandler handler)
+{
+	m_signUpResultHandler = handler;
+}
+
+void Network::SetLoginResultCallback(LoginResultHandler handler)
+{
+	m_loginResultHandler = handler;
+}
+
 void Network::SetMessageCallback(MessageHandler handler)
 {
 	m_messageHandler = handler;
@@ -367,6 +433,16 @@ void Network::SetPlayerLeaveCallback(PlayerLeaveHandler handler)
 void Network::SetPlayerInfoCallback(PlayerInfoHandler handler)
 {
 	m_playerInfoHandler = handler;
+}
+
+void Network::SetPlayerMoveCallback(PlayerMoveHandler handler)
+{
+	m_playerMoveHandler = handler;
+}
+
+void Network::SetPlayerPosSyncCallback(PlayerPosSyncHandler handler)
+{
+	m_playerPosSyncHandler = handler;
 }
 
 void Network::SetMonsterHitInfoCallback(MonsterHitInfoHandler handler)

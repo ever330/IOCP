@@ -129,6 +129,8 @@ void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, in
 	if (it == m_sessions.end())
 	{
 		MainServer::Instance().Log("세션 ID를 찾을 수 없습니다: " + std::to_string(sessionID));
+		EraseSession(sessionID);
+		MainServer::Instance().DisconnectUserBySessionID(sessionID);
 		return;
 	}
 
@@ -164,6 +166,7 @@ void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, in
 		{
 			MainServer::Instance().Log("WSASend 실패: " + std::to_string(error));
 			EraseSession(sessionID);
+			MainServer::Instance().DisconnectUserBySessionID(sessionID);
 			return;
 		}
 	}
@@ -195,6 +198,7 @@ void IOCP::BroadCast(std::shared_ptr<char[]> packet, int byteLength)
 		{
 			MainServer::Instance().Log("세션 소켓이 유효하지 않습니다: " + std::to_string(session.first));
 			EraseSession(session.first);
+			MainServer::Instance().DisconnectUserBySessionID(session.first);
 		}
 	}
 }
@@ -210,6 +214,7 @@ void IOCP::UpdateHeartBeatTime(unsigned int sessionID)
 	{
 		MainServer::Instance().Log("세션 ID를 찾을 수 없습니다: " + std::to_string(sessionID));
 		EraseSession(sessionID);
+		MainServer::Instance().DisconnectUserBySessionID(sessionID);
 	}
 }
 
@@ -329,6 +334,8 @@ void IOCP::HeartBeatThread()
 			{
 				// 응답 없음: 연결 종료 처리  
 				EraseSession(sessionID);
+				MainServer::Instance().Log("세션 타임아웃: " + std::to_string(sessionID));
+				MainServer::Instance().DisconnectUserBySessionID(sessionID);
 				continue;
 			}
 
@@ -387,6 +394,7 @@ void IOCP::WorkerThread()
 			if (session) 
 			{
 				EraseSession(session->sessionID);
+				MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
 			}
 			continue;
 		}
@@ -440,6 +448,7 @@ void IOCP::WorkerThread()
 			{
 				MainServer::Instance().Log("PostRecv 실패: " + std::to_string(WSAGetLastError()));
 				EraseSession(sessionID);
+				MainServer::Instance().DisconnectUserBySessionID(sessionID);
 				break;
 			}
 
@@ -469,6 +478,7 @@ void IOCP::WorkerThread()
 			{
 				MainServer::Instance().Log("PostRecv 실패: " + std::to_string(WSAGetLastError()));
 				EraseSession(session->sessionID);
+				MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
 			}
 			break;
 		}

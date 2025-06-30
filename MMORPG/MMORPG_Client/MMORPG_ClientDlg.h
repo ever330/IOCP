@@ -7,6 +7,7 @@
 #include "Network.h"
 #include "CChatInputEdit.h"
 #include "CTestView.h"
+#include "User.h"
 
 // CMMORPGClientDlg 대화 상자
 class CMMORPGClientDlg : public CDialogEx
@@ -16,6 +17,7 @@ public:
 	CMMORPGClientDlg(CWnd* pParent = nullptr);	// 표준 생성자입니다.
 
 	void SetNetwork(Network* network) { m_network = network; }
+	void SetUser(User* user) { m_user = user; }
 
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
@@ -32,7 +34,7 @@ protected:
 
 	Network* m_network;
 
-	CString m_strUserNickname;
+	User* m_user;
 
 	CRichEditCtrl m_chatOutput; // 채팅 내용 출력 창
 	CChatInputEdit m_chatInput; // 입력창

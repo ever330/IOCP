@@ -1,14 +1,12 @@
 #include "MapPacketHandler.h"
-#include "IOCP.h"
 #include "MainServer.h"
 
-MapPacketHandler::MapPacketHandler(MapManager& mapManager,
-    std::unordered_map<unsigned int, unsigned int>& userToSessionMap)
-    : m_mapManager(mapManager), m_userToSessionMap(userToSessionMap)
+MapPacketHandler::MapPacketHandler(MapManager& mapManager)
+    : m_mapManager(mapManager)
 {
 }
 
-bool MapPacketHandler::CanHandle(int packetID) const
+bool MapPacketHandler::CanHandle(uint16_t packetID) const
 {
     return packetID == C2SChangeMap || packetID == C2SPlayerAttack;
 }

@@ -1,4 +1,5 @@
 #include "Character.h"
+#include "MainServer.h"
 
 Character::Character(Vector3 spawnPos)
 	: m_maxHP(100), m_curHP(100), m_position(spawnPos), m_direction(0)
@@ -6,14 +7,12 @@ Character::Character(Vector3 spawnPos)
 	// Character 생성
 }
 
-Character::~Character()
+void Character::Update(float deltaTime)
 {
-	// Character 제거
-}
-
-void Character::Update()
-{
-
+	if (m_isMoving)
+	{
+		Move(deltaTime);
+	}
 }
 
 void Character::TakeDamage(int damage)
@@ -52,38 +51,44 @@ uint8_t Character::GetDirection() const
 	return m_direction;
 }
 
-void Character::Move(int dir)
+void Character::SetDirection(uint8_t dir)
 {
-	if (dir == 0)
+	m_direction = dir;
+}
+
+void Character::SetMoving(bool moving)
+{
+	m_isMoving = moving;
+}
+
+void Character::Move(float deltaTime)
+{
+	float distance = m_speed * deltaTime; // 초당 속도 * 시간 = 이동 거리
+
+	switch (m_direction)
 	{
-		m_position.x -= 10.0f;
-		if (m_position.x < 10.0f)
-		{
-			m_position.x = 10.0f;
-		}
+	case 0: // 상
+		m_position.y -= distance;
+		if (m_position.y < 10)
+			m_position.y = 10;
+		break;
+	case 1: // 하
+		m_position.y += distance;
+		if (m_position.y > MAP_MAX_Y + 10)
+			m_position.y = MAP_MAX_Y + 10;
+		break;
+	case 2: // 좌
+		m_position.x -= distance;
+		if (m_position.x < 10)
+			m_position.x = 10;
+		break;
+	case 3: // 우
+		m_position.x += distance;
+		if (m_position.x > MAP_MAX_X + 10)
+			m_position.x = MAP_MAX_X + 10;
+		break;
 	}
-	else if (dir == 1)
-	{
-		m_position.x += 10.0f;
-		if (m_position.x > MAP_MAX_X + 10.0f)
-		{
-			m_position.x = MAP_MAX_X + 10.0f;
-		}
-	}
-	else if (dir == 2)
-	{
-		m_position.y -= 10.0f;
-		if (m_position.y < 10.0f)
-		{
-			m_position.y = 10.0f;
-		}
-	}
-	else if (dir == 3)
-	{
-		m_position.y += 10.0f;
-		if (m_position.y > MAP_MAX_Y + 10.0f)
-		{
-			m_position.y = MAP_MAX_Y + 10.0f;
-		}
-	}
+
+	std::string logMessage = "Character moved to position: (" + std::to_string(m_position.x) + ", " + std::to_string(m_position.y) + ")";
+	MainServer::Instance().Log(logMessage);
 }

@@ -6,14 +6,12 @@
 #include "Map.h"
 #include "MapManager.h"
 
-class IOCP;
-
-class ChatPacketHandler : public IPacketHandler
+class ChatPacketHandler : public IUserPacketHandler
 {
 public:
     ChatPacketHandler(MapManager& mapManager);
 
-    bool CanHandle(int packetID) const override;
+    bool CanHandle(uint16_t packetID) const override;
 
     void Handle(std::shared_ptr<User> user, PacketBase* pac) override;
 

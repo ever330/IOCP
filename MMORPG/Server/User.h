@@ -24,10 +24,14 @@ public:
 	void SetConnected(bool isConnected);
 	bool IsConnected() const;
 
+	void SetLastInputFrame(unsigned int frame);
+	unsigned int GetLastInputFrame() const;
+
 private:
 	unsigned int m_userID;
 	std::string m_userName;
 	unsigned int m_currentMapID;
 	Character m_character;
 	bool m_isConnected;
+	unsigned int m_lastInputFrame;
 };

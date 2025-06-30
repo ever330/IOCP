@@ -10,10 +10,13 @@ BEGIN_MESSAGE_MAP(CTestView, CView)
 	ON_MESSAGE(WM_PLAYER_ENTER, &CTestView::OnPlayerEnter)
 	ON_MESSAGE(WM_PLAYER_LEAVE, &CTestView::OnPlayerLeave)
 	ON_MESSAGE(WM_UPDATE_PLAYER_STATE, &CTestView::OnUpdatePlayerState)
+	ON_MESSAGE(WM_OTHER_PLAYER_MOVE, &CTestView::OnOtherPlayerMove)
+	ON_MESSAGE(WM_PLAYER_POS_SYNC, &CTestView::OnPlayerPosSync)
 	ON_MESSAGE(WM_UPDATE_MONSTER_HIT, &CTestView::OnUpdateMonsterHit)
 	ON_MESSAGE(WM_MONSTER_RESPAWN, &CTestView::OnRespawnMonster)
 	ON_MESSAGE(WM_PLAYER_ATTACK, &CTestView::OnPlayerAttack)
 	ON_WM_KEYDOWN()
+	ON_WM_KEYUP()
 	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
@@ -22,6 +25,16 @@ CTestView::CTestView()
 	// 초기 위치 설정
 	m_playerPos = CPoint(100, 100);
 	m_network = nullptr;
+	m_lastAttackTime = 0;
+	m_attackStartTime = 0;
+	m_isAttacking = false;
+	m_isMoving = false;
+
+	m_attackDirection = Direction::Up;
+	m_playerDirection = Direction::Up;
+	m_user = nullptr;
+
+	m_currentFrameID = 0;
 }
 
 CTestView::~CTestView()
@@ -58,94 +71,83 @@ void CTestView::OnInitialUpdate()
 {
 	CView::OnInitialUpdate();
 
-	SetTimer(1, 16, nullptr); // 약 60 FPS
-	m_prevTime = GetTickCount64();
+	UINT_PTR timerID = SetTimer(1, 100, nullptr);
+	if (timerID == 0) {
+		AfxMessageBox(_T("타이머 설정 실패!"));
+	}
+	m_lastUpdateTime = std::chrono::steady_clock::now();
 }
 
 void CTestView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
 	DWORD now = GetTickCount64();
 
-	switch (nChar)
+	// 스페이스바(공격)는 이동 판단 없이 따로 처리
+	if (nChar == VK_SPACE)
 	{
-	case VK_LEFT:
-		m_playerPos.x -= 10;
-		if (m_playerPos.x < 10)
-		{
-			m_playerPos.x = 10;
-			break;
-		}
-
-		if (m_network)
-			m_network->PlayerMove(Direction::Left);
-
-		m_playerDirection = Direction::Left;
-		break;
-
-	case VK_RIGHT:
-		m_playerPos.x += 10;
-		if (m_playerPos.x > MAP_MAX_X + 10) // 화면 너비 - 플레이어 크기
-		{
-			m_playerPos.x = MAP_MAX_X + 10;
-			break;
-		}
-
-		if (m_network)
-			m_network->PlayerMove(Direction::Right);
-
-		m_playerDirection = Direction::Right;
-		break;
-
-	case VK_UP:
-		m_playerPos.y -= 10;
-		if (m_playerPos.y < 10)
-		{
-			m_playerPos.y = 10;
-			break;
-		}
-
-		if (m_network)
-			m_network->PlayerMove(Direction::Up);
-
-		m_playerDirection = Direction::Up;
-		break;
-
-	case VK_DOWN:
-		m_playerPos.y += 10;
-		if (m_playerPos.y > MAP_MAX_Y + 10)
-		{
-			m_playerPos.y = MAP_MAX_Y + 10;
-			break;
-		}
-
-		if (m_network)
-			m_network->PlayerMove(Direction::Down);
-
-		m_playerDirection = Direction::Down;
-		break;
-
-	case VK_SPACE:
-		if (now - m_lastAttackTime > 500) // 0.5초 쿨타임
+		if (now - m_lastAttackTime > 500)
 		{
 			m_lastAttackTime = now;
 
 			m_isAttacking = true;
 			m_attackStartTime = now;
-
 			m_attackStartPos = m_playerPos;
 			m_attackDirection = m_playerDirection;
 
 			if (m_network)
+			{
+				m_network->PlayerStop(m_currentFrameID++);
+				m_isMoving = false;
 				m_network->PlayerAttack(m_playerDirection);
+			}
 		}
-		break;
-
-	default:
-		break;
+		Invalidate(FALSE);
+		return; // 여기서 끝냄 (아래 이동 로직 실행 X)
 	}
 
- 	Invalidate(false);
-	CView::OnKeyDown(nChar, nRepCnt, nFlags); // 기본 처리
+	switch (nChar)
+	{
+	case VK_LEFT:  m_playerDirection = Direction::Left; break;
+	case VK_RIGHT: m_playerDirection = Direction::Right; break;
+	case VK_UP:    m_playerDirection = Direction::Up; break;
+	case VK_DOWN:  m_playerDirection = Direction::Down; break;
+	default: return;
+	}
+
+	m_isMoving = true;
+
+	// 서버 전송
+	if (m_network)
+	{
+		uint32_t frameID = m_currentFrameID++;
+		m_inputBuffer.push_back({ frameID, m_playerDirection });
+		m_network->PlayerMove(m_playerDirection, frameID);
+	}
+
+	Invalidate(FALSE);
+	CView::OnKeyDown(nChar, nRepCnt, nFlags);
+}
+
+void CTestView::OnKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
+{
+	Direction releasedDir;
+	switch (nChar)
+	{
+	case VK_LEFT:  releasedDir = Direction::Left; break;
+	case VK_RIGHT: releasedDir = Direction::Right; break;
+	case VK_UP:    releasedDir = Direction::Up; break;
+	case VK_DOWN:  releasedDir = Direction::Down; break;
+	default: return;
+	}
+
+	if (releasedDir == m_playerDirection)
+	{
+		m_isMoving = false;
+		if (m_network)
+			m_network->PlayerStop(m_currentFrameID);
+	}
+
+	CView::OnKeyUp(nChar, nRepCnt, nFlags);
 }
 
 void CTestView::OnLButtonDown(UINT nFlags, CPoint point)
@@ -278,22 +280,69 @@ void CTestView::DrawAttackEffect(CDC* pDC, CPoint startPos, Direction attackDir)
 	pDC->SelectObject(pOldPen);
 }
 
+void CTestView::UpdatePlayer(float deltaTime)
+{
+	float speed = 150.0f;
+
+	if (m_isMoving)
+	{
+		float distance = speed * deltaTime;
+
+		CPoint beforePos = m_playerPos;
+
+		switch (m_playerDirection)
+		{
+		case Direction::Left:  m_playerPos.x -= distance; break;
+		case Direction::Right: m_playerPos.x += distance; break;
+		case Direction::Up:    m_playerPos.y -= distance; break;
+		case Direction::Down:  m_playerPos.y += distance; break;
+		}
+
+		ClampPosition(m_playerPos); // 범위 제한
+
+		// 위치가 바뀌었을 경우에만 서버로 이동 패킷 전송
+		if (m_playerPos != beforePos && m_network)
+		{
+			m_network->PlayerMove(m_playerDirection, m_currentFrameID);
+
+			PlayerInput input{ m_currentFrameID, m_playerDirection };
+
+			// 입력 버퍼 저장
+			m_inputBuffer.push_back(input);
+
+			m_currentFrameID++;
+		}
+	}
+}
+
+void CTestView::UpdateOtherPlayers(float deltaTime)
+{
+}
+
+void CTestView::ClampPosition(CPoint& pos)
+{
+	if (pos.x < 10)
+		pos.x = 10;
+	else if (pos.x > MAP_MAX_X + 10)
+		pos.x = MAP_MAX_X + 10;
+	if (pos.y < 10)
+		pos.y = 10;
+	else if (pos.y > MAP_MAX_Y + 10)
+		pos.y = MAP_MAX_Y + 10;
+}
+
 void CTestView::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == 1)
 	{
-		DWORD currentTime = GetTickCount64();
-		float deltaTime = (currentTime - m_prevTime) / 1000.0f; // 초 단위로 변환
+		auto now = std::chrono::steady_clock::now();
+		float deltaTime = std::chrono::duration<float>(now - m_lastUpdateTime).count();
 
-		m_prevTime = currentTime;
+		UpdatePlayer(deltaTime);
 
-		// 몬스터 업데이트
-		for (auto& monster : m_monsters)
-		{
-			monster.second->Update(deltaTime);
-		}
+		m_lastUpdateTime = now;
 
-		Invalidate(false);
+		Invalidate(FALSE);
 	}
 
 	CView::OnTimer(nIDEvent);
@@ -343,7 +392,7 @@ LRESULT CTestView::OnMapChange(WPARAM wParam, LPARAM lParam)
 LRESULT CTestView::OnPlayerEnter(WPARAM wParam, LPARAM lParam)
 {
 	auto* pInfo = reinterpret_cast<OtherPlayer*>(lParam);
-	if (pInfo && m_userNickname != pInfo->name)
+	if (pInfo && m_user->GetUserId() != pInfo->userID)
 	{
 		m_otherPlayers.insert({ pInfo->userID, *pInfo });
 		delete pInfo;
@@ -380,8 +429,9 @@ LRESULT CTestView::OnUpdatePlayerState(WPARAM wParam, LPARAM lParam)
 
 			player.position.x = info.PosX;
 			player.position.y = info.PosY;
+			player.userID = info.UserID;
 
-			if (nameConverter != m_userNickname)
+			if (player.userID != m_user->GetUserId())
 			{
 				m_otherPlayers.insert({ player.userID, player });
 			}
@@ -389,6 +439,87 @@ LRESULT CTestView::OnUpdatePlayerState(WPARAM wParam, LPARAM lParam)
 		delete pInfo;
 		Invalidate(false);
 	}
+	return 0;
+}
+
+LRESULT CTestView::OnOtherPlayerMove(WPARAM wParam, LPARAM lParam)
+{
+	uint16_t userID = static_cast<uint16_t>(wParam);
+	Direction direction = static_cast<Direction>(lParam);
+
+	auto it = m_otherPlayers.find(userID);
+	if (it != m_otherPlayers.end())
+	{
+		switch (direction)
+		{
+		case Direction::Left:
+			it->second.position.x -= 10;
+			break;
+		case Direction::Right:
+			it->second.position.x += 10;
+			break;
+		case Direction::Up:
+			it->second.position.y -= 10;
+			break;
+		case Direction::Down:
+			it->second.position.y += 10;
+			break;
+		default:
+			break;
+		}
+	}
+	Invalidate(false);
+
+	return 0;
+}
+
+LRESULT CTestView::OnPlayerPosSync(WPARAM wParam, LPARAM lParam)
+{
+	uint32_t ackFrame = static_cast<uint32_t>(wParam);
+	Vector3 serverPos = *reinterpret_cast<Vector3*>(&lParam);
+	CPoint serverPosPoint(static_cast<int>(serverPos.x), static_cast<int>(serverPos.y));
+
+	const float ALLOWED_ERROR = 5.0f;
+
+	float dx = m_playerPos.x - serverPosPoint.x;
+	float dy = m_playerPos.y - serverPosPoint.y;
+	float distance = sqrtf(dx * dx + dy * dy);
+
+	if (distance > ALLOWED_ERROR)
+	{
+		// 보간 방식으로 위치 보정
+		const float correctionRate = 0.2f;
+		m_playerPos.x += (serverPosPoint.x - m_playerPos.x) * correctionRate;
+		m_playerPos.y += (serverPosPoint.y - m_playerPos.y) * correctionRate;
+
+		// 이전 입력 제거
+		while (!m_inputBuffer.empty() && m_inputBuffer.front().frameID <= ackFrame)
+		{
+			m_inputBuffer.pop_front();
+		}
+
+		// 남은 입력 재적용
+		const float fixedDelta = 0.1f;
+		float speed = 150.0f;
+
+		for (const auto& input : m_inputBuffer)
+		{
+			float distance = speed * fixedDelta;
+
+			switch (input.dir)
+			{
+			case Direction::Left:  m_playerPos.x -= distance; break;
+			case Direction::Right: m_playerPos.x += distance; break;
+			case Direction::Up:    m_playerPos.y -= distance; break;
+			case Direction::Down:  m_playerPos.y += distance; break;
+			}
+
+			ClampPosition(m_playerPos);
+		}
+
+		Invalidate(FALSE);
+	}
+
 	return 0;
 }
 

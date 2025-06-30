@@ -4,17 +4,17 @@
 #include "IPacketHandler.h"
 #include "User.h"
 
-class AuthPacketHandler : public IPacketHandler
+class AuthPacketHandler : public IAuthPacketHandler
 {
 public:
     AuthPacketHandler();
 
-    bool CanHandle(int packetID) const override;
+    bool CanHandle(uint16_t packetID) const override;
 
-    void Handle(std::shared_ptr<User> user, PacketBase* pac) override;
+    void Handle(unsigned int sessionID, PacketBase* pac) override;
 
 private:
-    void HandleCheckID(std::shared_ptr<User> user, PacketBase* pac);
-	void HandleLogin(std::shared_ptr<User> user, PacketBase* pac);
-	void HandleSignUp(std::shared_ptr<User> user, PacketBase* pac);
+    void HandleCheckID(unsigned int sessionID, PacketBase* pac);
+	void HandleLogin(unsigned int sessionID, PacketBase* pac);
+	void HandleSignUp(unsigned int sessionID, PacketBase* pac);
 };

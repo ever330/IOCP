@@ -43,6 +43,9 @@
     <Filter Include="DBManager">
       <UniqueIdentifier>{7a98726b-78e3-48cf-8167-5bf2fd0e1aaf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Redis">
+      <UniqueIdentifier>{a5aa9d06-ea63-4b3f-a4dd-1dde85c0a84c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -86,6 +89,9 @@
     </ClCompile>
     <ClCompile Include="AuthPacketHandler.cpp">
       <Filter>PacketHandler</Filter>
+    </ClCompile>
+    <ClCompile Include="RedisManager.cpp">
+      <Filter>Redis</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -145,6 +151,9 @@
     </ClInclude>
     <ClInclude Include="AuthPacketHandler.h">
       <Filter>PacketHandler</Filter>
+    </ClInclude>
+    <ClInclude Include="RedisManager.h">
+      <Filter>Redis</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

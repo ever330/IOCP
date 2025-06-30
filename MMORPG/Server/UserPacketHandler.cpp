@@ -1,5 +1,4 @@
 #include "UserPacketHandler.h"
-#include "IOCP.h"
 #include "User.h"
 #include "MainServer.h"
 
@@ -7,18 +6,14 @@ UserPacketHandler::UserPacketHandler()
 {
 }
 
-bool UserPacketHandler::CanHandle(int packetID) const
+bool UserPacketHandler::CanHandle(uint16_t packetID) const
 {
-	return packetID == C2SConnect || packetID == C2SDisconnect || packetID == C2SSetName || packetID == C2SPlayerMove;
+	return packetID == C2SSetName || packetID == C2SPlayerMove || packetID == C2SPlayerStop;
 }
 
 void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 {
-	if (pac->PacID == C2SDisconnect)
-	{
-		HandleUserDisconnect(user, pac);
-	}
-	else if (pac->PacID == C2SSetName)
+	if (pac->PacID == C2SSetName)
 	{
 		HandleSetName(user, pac);
 	}
@@ -26,29 +21,10 @@ void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 	{
 		HandlePlayerMove(user, pac);
 	}
-}
-
-void UserPacketHandler::Handle(unsigned int sessionID, PacketBase* pac)
-{
-	if (pac->PacID == C2SConnect)
+	else if (pac->PacID == C2SPlayerStop)
 	{
-		HandleUserConnect(sessionID, pac);
+		HandlePlayerStop(user, pac);
 	}
-}
-
-void UserPacketHandler::HandleUserConnect(unsigned int sessionID, PacketBase* pac)
-{
-	auto userId = m_userID;
-	auto user = std::make_shared<User>(userId, "");
-
-	m_userID++;
-
-	MainServer::Instance().AddUser(sessionID, user);
-}
-
-void UserPacketHandler::HandleUserDisconnect(std::shared_ptr<User> user, PacketBase* pac)
-{
-	MainServer::Instance().DisconnectUser(user.get()->GetUserID());
 }
 
 void UserPacketHandler::HandleSetName(std::shared_ptr<User> user, PacketBase* pac)
@@ -71,20 +47,60 @@ void UserPacketHandler::HandleSetName(std::shared_ptr<User> user, PacketBase* pa
 
 void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase* pac)
 {
-	C2SPlayerMovePacket move;
-	memcpy(&move, pac->Body, sizeof(move));
+    C2SPlayerMovePacket move;
+    memcpy(&move, pac->Body, sizeof(move));
 
-	user->GetCharacter().Move(move.MoveDirection);
+	if (move.FrameID < user->GetLastInputFrame())
+		return; // 과거 입력 무시
 
-	// 이동 브로드캐스트
-	S2CPlayerMovePacket response{};
-	memcpy(response.Name, user->GetUserName().c_str(), sizeof(response.Name));
-	response.MoveDirection = move.MoveDirection;
+    user->GetCharacter().SetDirection(move.MoveDirection);
+    user->GetCharacter().SetMoving(true);
+    user->SetLastInputFrame(move.FrameID); // 클라가 보낸 frameID 저장
 
-	int packetSize = sizeof(PacketBase) + sizeof(response);
-	std::shared_ptr<char[]> buffer(new char[packetSize]);
-	PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
-	newPac->PacID = S2CPlayerMove;
-	newPac->PacketSize = packetSize;
-	memcpy(newPac->Body, &response, sizeof(response));
+    S2CPlayerMovePacket movePacket{};
+    movePacket.UserID = user->GetUserID();
+    movePacket.MoveDirection = move.MoveDirection;
+
+    int packetSize = sizeof(PacketBase) + sizeof(movePacket);
+    std::shared_ptr<char[]> buffer(new char[packetSize]);
+    PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
+    newPac->PacID = S2CPlayerMove;
+    newPac->PacketSize = packetSize;
+    memcpy(newPac->Body, &movePacket, sizeof(movePacket));
+
+    // 같은 맵 유저들에게 방향 브로드캐스트
+    auto map = MainServer::Instance().GetMapManager().GetMap(user->GetCurrentMapID());
+
+    if (map)
+        MainServer::Instance().BroadCast(map->GetUsers(), newPac);
+
+
+    S2CPlayerPosSyncPacket sync{};
+	Vector3 pos = user->GetCharacter().GetPosition();
+    sync.PosX = pos.x;
+	sync.PosY = pos.y;
+	sync.PosZ = pos.z;
+    sync.AckFrameID = move.FrameID; // 마지막으로 처리한 클라 입력
+
+    int packetSize2 = sizeof(PacketBase) + sizeof(sync);
+    std::shared_ptr<char[]> buffer2(new char[packetSize2]);
+    PacketBase* response = reinterpret_cast<PacketBase*>(buffer2.get());
+    response->PacID = S2CPlayerPosSync;
+    response->PacketSize = packetSize2;
+    memcpy(response->Body, &sync, sizeof(sync));
+
+	MainServer::Instance().SendPacket(user->GetUserID(), response); // 유저에게 직접 전송
+}
+
+void UserPacketHandler::HandlePlayerStop(std::shared_ptr<User> user, PacketBase* pac)
+{
+	C2SPlayerStopPacket stop;
+	memcpy(&stop, pac->Body, sizeof(stop));
+
+	if (stop.FrameID < user->GetLastInputFrame())
+		return; // 과거 입력 무시
+
+	// 플레이어가 멈췄을 때 처리 (예: 이동 중지 플래그 설정)
+	user->GetCharacter().SetMoving(false);
+	user->SetLastInputFrame(stop.FrameID); // 클라가 보낸 frameID 저장
 }

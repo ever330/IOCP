@@ -8,10 +8,10 @@ class Character
 {
 public:
 	Character() = delete;
-	~Character();
+	~Character() = default;
 	Character(Vector3 spawnPos);
 
-	void Update();
+	void Update(float deltaTime);
 	void TakeDamage(int damage);
 	void Respawn(Vector3 spawnPos);
 	bool IsDead() const;
@@ -19,11 +19,18 @@ public:
 	unsigned int GetCurHp() const;
 	Vector3 GetPosition() const;
 	uint8_t GetDirection() const;
-	void Move(int dir);
+
+	void SetDirection(uint8_t dir);
+	void SetMoving(bool moving);
 
 private:
+	void Move(float deltaTime);
+
 	unsigned int m_maxHP;
 	unsigned int m_curHP;
 	Vector3 m_position;
 	uint8_t m_direction;
+
+	bool m_isMoving = false;
+	float m_speed = 150.0f;
 };

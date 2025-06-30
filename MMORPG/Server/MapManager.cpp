@@ -21,12 +21,12 @@ void MapManager::Initialize()
 	}
 }
 
-void MapManager::Update()  
+void MapManager::Update(float deltaTime, int tickCount)
 {  
     std::scoped_lock lock(m_mutex);  
     for (auto& pair : m_maps)  
     {  
-        pair.second->Update();
+        pair.second->Update(deltaTime, tickCount);
     }  
 }
 

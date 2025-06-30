@@ -8,12 +8,13 @@ class User;
 class PacketDispatcher
 {
 public:
-    void RegisterHandler(std::unique_ptr<IPacketHandler> handler);
+    void RegisterAuthHandler(std::unique_ptr<IAuthPacketHandler> handler);
+    void RegisterUserHandler(std::unique_ptr<IUserPacketHandler> handler);
     bool DispatchPacket(std::shared_ptr<User> user, PacketBase* packet);
-
     bool DispatchPacket(unsigned int sessionID, PacketBase* packet);
 
 private:
-    std::vector<std::unique_ptr<IPacketHandler>> m_handlers;
+    std::vector<std::unique_ptr<IAuthPacketHandler>> m_authHandlers;
+    std::vector<std::unique_ptr<IUserPacketHandler>> m_userHandlers;
 };
 

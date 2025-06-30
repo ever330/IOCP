@@ -3,12 +3,18 @@
 #include "Packet.h"
 #include "User.h"
 
-class IPacketHandler
-{
+class IPacketHandler {
+public:
+    virtual bool CanHandle(uint16_t packetID) const = 0;
+    virtual ~IPacketHandler() = default;
+};
+
+class IAuthPacketHandler : public IPacketHandler {
+public:
+    virtual void Handle(unsigned int sessionID, PacketBase* pac) = 0;
+};
+
+class IUserPacketHandler : public IPacketHandler {
 public:
     virtual void Handle(std::shared_ptr<User> user, PacketBase* pac) = 0;
-    // 유저 연결, 해제 시 호출
-    virtual void Handle(unsigned int sessionID, PacketBase* pac) {};
-    virtual bool CanHandle(int packetID) const = 0;
-    virtual ~IPacketHandler() = default;
 };

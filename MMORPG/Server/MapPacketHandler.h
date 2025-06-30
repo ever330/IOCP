@@ -6,15 +6,12 @@
 #include "Map.h"
 #include "MapManager.h"
 
-class IOCP;
-
-class MapPacketHandler : public IPacketHandler
+class MapPacketHandler : public IUserPacketHandler
 {
 public:
-    MapPacketHandler(MapManager& mapManager,
-        std::unordered_map<unsigned int, unsigned int>& userToSessionMap);
+    MapPacketHandler(MapManager& mapManager);
 
-    bool CanHandle(int packetID) const override;
+    bool CanHandle(uint16_t packetID) const override;
 
     void Handle(std::shared_ptr<User> user, PacketBase* pac) override;
 
@@ -23,5 +20,4 @@ private:
 	void HandlePlayerAttack(std::shared_ptr<User> user, PacketBase* packet);
 
 	MapManager& m_mapManager;
-    std::unordered_map<unsigned int, unsigned int>& m_userToSessionMap;
 };

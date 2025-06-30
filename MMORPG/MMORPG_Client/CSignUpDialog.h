@@ -18,18 +18,26 @@ public:
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
 
+	HICON m_hIcon;
+
+	virtual BOOL OnInitDialog();
+
 	DECLARE_MESSAGE_MAP()
 
 public:
-	afx_msg void OnBnClickedBtnCheckId();
-	afx_msg void OnBnClickedBtnSignUp();
-
 	void SetNetwork(Network* network) { m_network = network; }
 
 private:
 	Network* m_network;
+	CEdit m_idEdit;
+	CEdit m_passwordEdit;
+	CEdit m_passwordConfirmEdit;
+
 public:
 	afx_msg void OnClickedIdCheck();
 	afx_msg void OnClickedSignupSignup();
-	afx_msg void OnBnClickedSignupCancle();
+	afx_msg void OnEnChangeIDEdit();
+	afx_msg void OnEnChangePasswordEdit();
+	afx_msg void OnEnChangePasswordConfirmEdit();
+	afx_msg LRESULT OnSignUpSuccess(WPARAM wParam, LPARAM lParam);
 };

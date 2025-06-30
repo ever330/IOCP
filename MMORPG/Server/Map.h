@@ -14,7 +14,7 @@ public:
 	~Map();
 
 	void Initialize();
-	void Update();
+	void Update(float deltaTime, int tickCount);
 
 	void AddUser(std::shared_ptr<User> user);
 	void RemoveUser(std::shared_ptr<User> user);

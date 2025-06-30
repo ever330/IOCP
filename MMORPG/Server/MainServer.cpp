@@ -5,6 +5,7 @@
 #include "MapPacketHandler.h"
 #include "UserPacketHandler.h"
 #include "AuthPacketHandler.h"
+#include "RedisManager.h"
 
 bool MainServer::StartServer()
 {
@@ -13,6 +14,15 @@ bool MainServer::StartServer()
 
 	m_DBManager = std::make_unique<DBManager>();
 	m_DBManager->Initialize("tcp://127.0.0.1:3306", "root", "rainbow@@", "rainbow");
+
+	if (RedisManager::Instance().Connect("127.0.0.1", 6379, "1234"))
+	{
+		Log("Redis 연결 성공");
+	}
+	else
+	{
+		Log("Redis 연결 실패");
+	}
 
 	RegisterPacketHandlers();
 
@@ -29,9 +39,7 @@ bool MainServer::StartServer()
 
 	while (true)
 	{
-		m_mapManager.Update();
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		Update();
 	}
 
 	StopServer();
@@ -54,16 +62,7 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 	// 디버깅 출력
 	Log("PushData: 세션 ID " + std::to_string(sessionID) + ", 패킷 크기: " + std::to_string(pac->PacketSize) + ", 타입: " + std::to_string(pac->PacID));
 
-	unsigned int curUserID = 0;
-	if (m_sessionToUserMap.find(sessionID) != m_sessionToUserMap.end())
-	{
-		curUserID = m_sessionToUserMap[sessionID];
-	}
-	else
-	{
-		m_sessionToUserMap[sessionID] = curUserID;
-		m_userToSessionMap[curUserID] = sessionID;
-	}
+	unsigned int curUserID = RedisManager::Instance().GetUserIDBySessionID(sessionID);
 
 	int index = sessionID % PACKET_THREAD;
 	{
@@ -94,11 +93,9 @@ void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
 {
 	std::scoped_lock lock(m_mutex);
 
-	auto sessionIt = m_sessionToUserMap.find(sessionID);
-	if (sessionIt != m_sessionToUserMap.end())
+	unsigned int curUserID = RedisManager::Instance().GetUserIDBySessionID(sessionID);
+	if (curUserID != -1)
 	{
-		unsigned int curUserID = sessionIt->second;
-
 		auto userIt = m_users.find(curUserID);
 		if (userIt != m_users.end())
 		{
@@ -108,39 +105,13 @@ void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
 				m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
 			}
 		}
-
 		m_users.erase(curUserID);
-		m_sessionToUserMap.erase(sessionID);
-		m_userToSessionMap.erase(curUserID);
 	}
 	else
 	{
 		Log("DisconnectClient: 세션 ID " + std::to_string(sessionID) + "에 대한 유저가 존재하지 않음");
 	}
-}
-
-void MainServer::DisconnectUser(unsigned int userID)
-{
-	std::scoped_lock lock(m_mutex);
-	auto it = m_users.find(userID);
-
-	if (it != m_users.end())
-	{
-		auto user = it->second;
-		unsigned int sessionID = m_userToSessionMap.find(userID)->second;
-
-		if (user->GetCurrentMapID())
-		{
-			m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
-		}
-		m_users.erase(it);
-		m_sessionToUserMap.erase(sessionID);
-		m_userToSessionMap.erase(userID);
-	}
-	else
-	{
-		Log("DisconnectUser: 유저 ID " + std::to_string(userID) + "에 대한 유저가 존재하지 않음");
-	}
+	RedisManager::Instance().RemoveMapping(sessionID);
 }
 
 void MainServer::SendPacket(unsigned int userID, PacketBase* packet)
@@ -150,13 +121,20 @@ void MainServer::SendPacket(unsigned int userID, PacketBase* packet)
 	auto it = m_users.find(userID);
 	if (it != m_users.end())
 	{
-		unsigned int sessionID = m_userToSessionMap[userID];
+		unsigned int sessionID = RedisManager::Instance().GetSessionIDByUserID(userID);
 		m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
 	}
 	else
 	{
 		Log("SendPacket: 유저 ID " + std::to_string(userID) + "에 대한 유저가 존재하지 않음");
 	}
+}
+
+void MainServer::SendPacketBySessionID(unsigned int sessionID, PacketBase* packet)
+{
+	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
+	memcpy(buffer.get(), packet, packet->PacketSize);
+	m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
 }
 
 void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, PacketBase* packet)
@@ -169,26 +147,30 @@ void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, Pack
 		auto it = m_users.find(userID);
 		if (it != m_users.end())
 		{
-			unsigned int sessionID = m_sessionToUserMap[userID];
-
+			unsigned int sessionID = RedisManager::Instance().GetSessionIDByUserID(userID);
 			m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
 		}
 	}
 }
 
-void MainServer::AddUser(unsigned int sessionID, std::shared_ptr<User> user)
+void MainServer::AddUser(std::shared_ptr<User> user)
 {
 	std::scoped_lock lock(m_mutex);
 	if (m_users.find(user->GetUserID()) == m_users.end())
 	{
 		m_users[user->GetUserID()] = user;
-		m_sessionToUserMap[sessionID] = user->GetUserID();
-		m_userToSessionMap[user->GetUserID()] = sessionID;
 	}
 	else
 	{
 		Log("AddUser: 유저 ID " + std::to_string(user->GetUserID()) + "는 이미 존재합니다.");
 	}
+}
+
+void MainServer::BindSession(unsigned int sessionID, std::shared_ptr<User> user)
+{
+	std::scoped_lock lock(m_mutex);
+	unsigned int userID = user->GetUserID();
+	RedisManager::Instance().SetSessionMapping(userID, sessionID);
 }
 
 std::shared_ptr<User> MainServer::GetUserByID(unsigned int userID) const
@@ -224,30 +206,33 @@ void MainServer::PacketWorker(int index)
 			m_workerQueues[index].pop();
 		}
 
-		std::shared_ptr<User> user = nullptr;
+		auto pacID = job.packet->PacID;
 
+		// 로그인 전 패킷 목록 처리
+		if (IsAuthPacket(pacID))
 		{
-			std::lock_guard<std::mutex> lock(m_mutex);
+			PacketProcess(job.sessionID, job.packet);  // 로그인 전: sessionID로 처리
+		}
+		else
+		{
+			std::shared_ptr<User> user = nullptr;
 
-			auto it = m_users.find(job.userID);
-			if (it != m_users.end()) 
 			{
-				user = it->second;
+				std::lock_guard<std::mutex> lock(m_mutex);
+				auto it = m_users.find(job.userID);
+				if (it != m_users.end())
+					user = it->second;
 			}
-		}
 
-		if (user) 
-		{
-			PacketProcess(user, job.packet);
-		}
-		else if (job.packet->PacID == C2SConnect)
-		{
-			PacketProcess(job.sessionID, job.packet);
-		}
-		else 
-		{
-			Log("유저가 존재하지 않음: " + std::to_string(job.userID));
-			delete[] reinterpret_cast<char*>(job.packet);
+			if (user)
+			{
+				PacketProcess(user, job.packet);  // 로그인 후: User 객체로 처리
+			}
+			else
+			{
+				Log("유저 없음: " + std::to_string(job.userID) + " / PacID: " + std::to_string(pacID));
+				delete[] reinterpret_cast<char*>(job.packet);
+			}
 		}
 	}
 }
@@ -266,7 +251,7 @@ void MainServer::PacketProcess(unsigned int sessionID, PacketBase* pac)
 {
 	if (!m_dispatcher.DispatchPacket(sessionID, pac))
 	{
-		Log("처리할 수 없는 패킷 ID: " + std::to_string(pac->PacID) + " (UserID: " + std::to_string(sessionID) + ")");
+		Log("처리할 수 없는 패킷 ID: " + std::to_string(pac->PacID) + " (SessionID: " + std::to_string(sessionID) + ")");
 	}
 
 	delete[] reinterpret_cast<char*>(pac);
@@ -274,10 +259,10 @@ void MainServer::PacketProcess(unsigned int sessionID, PacketBase* pac)
 
 void MainServer::RegisterPacketHandlers()
 {
-	m_dispatcher.RegisterHandler(std::make_unique<UserPacketHandler>());
-	m_dispatcher.RegisterHandler(std::make_unique<ChatPacketHandler>(m_mapManager));
-	m_dispatcher.RegisterHandler(std::make_unique<MapPacketHandler>(m_mapManager, m_userToSessionMap));
-	m_dispatcher.RegisterHandler(std::make_unique<AuthPacketHandler>());
+	m_dispatcher.RegisterUserHandler(std::make_unique<UserPacketHandler>());
+	m_dispatcher.RegisterUserHandler(std::make_unique<ChatPacketHandler>(m_mapManager));
+	m_dispatcher.RegisterUserHandler(std::make_unique<MapPacketHandler>(m_mapManager));
+	m_dispatcher.RegisterAuthHandler(std::make_unique<AuthPacketHandler>());
 }
 
 void MainServer::OutputServerMessages()
@@ -296,7 +281,36 @@ void MainServer::OutputServerMessages()
 	}
 }
 
+bool MainServer::IsAuthPacket(uint16_t packetID) const
+{
+	return packetID == C2SLogin || packetID == C2SSignUp || packetID == C2SCheckID;
+}
+
 void MainServer::Log(const std::string& message)
 {
 	m_logQueue.push(message);
+}
+
+MapManager& MainServer::GetMapManager()
+{
+	return m_mapManager;
+}
+
+void MainServer::Update()
+{
+	static auto lastTime = std::chrono::steady_clock::now();
+	static int tickCount = 0;
+
+	auto now = std::chrono::steady_clock::now();
+	std::chrono::duration<float> elapsed = now - lastTime;
+	float deltaTime = elapsed.count();
+
+	// 맵 업데이트
+	m_mapManager.Update(deltaTime, tickCount);
+
+	lastTime = std::chrono::steady_clock::now();
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	tickCount++;
 }

@@ -10,7 +10,7 @@ public:
 	~MapManager() = default;
 
 	void Initialize();
-	void Update();
+	void Update(float deltaTime, int tickCount);
 	std::shared_ptr<Map> GetMap(unsigned int mapId);
 
 private:

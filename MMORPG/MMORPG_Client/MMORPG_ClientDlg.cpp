@@ -74,66 +74,50 @@ END_MESSAGE_MAP()
 
 #include <string> // Add this include for std::string and std::wstring conversion
 
+#include <atlstr.h> // Include this for CString conversion
+
 BOOL CMMORPGClientDlg::OnInitDialog()
 {
-	CDialogEx::OnInitDialog();
+    CDialogEx::OnInitDialog();
 
-	//CNicknameDialog dlg;
-	//if (dlg.DoModal() == IDOK)
-	//{
-	//	m_strUserNickname = dlg.m_strNickname; // 닉네임 저장
-	//	AfxMessageBox(L"닉네임 설정 완료: " + m_strUserNickname);
+    SetChatIO();
+    SetMapList();
+    SetGameView();
+    SetCallback();
+    m_userNicknameStatic.SubclassDlgItem(IDC_NICKNAME, this);
 
-	//	if (m_network.Connect("127.0.0.1", 3030))
-	//	{
-	//		CT2A asciiConverter(m_strUserNickname);
-	//		std::string userNickname(asciiConverter);
+    CString userNickname = CString(m_user->GetUsername().c_str());
+    m_userNicknameStatic.SetWindowText(userNickname);
 
-	//		m_network.SetName(userNickname);
-	//	}
-	//}
-	//else
-	//{
-	//	AfxMessageBox(L"닉네임 입력 취소됨. 종료합니다.");
-	//	EndDialog(IDCANCEL);
-	//	return FALSE;
-	//}
+    m_testView->SetNetwork(m_network);
+	m_testView->SetUser(m_user);
 
-	SetChatIO();
-	SetMapList();
-	SetGameView();
-	SetCallback();
-	m_userNicknameStatic.SubclassDlgItem(IDC_NICKNAME, this);
-	m_userNicknameStatic.SetWindowText(m_strUserNickname);
-	m_testView->SetNetwork(m_network);
-	m_testView->SetUserNickname(m_strUserNickname);
+    // IDM_ABOUTBOX는 시스템 명령 범위에 있어야 합니다.
+    ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
+    ASSERT(IDM_ABOUTBOX < 0xF000);
 
-	// IDM_ABOUTBOX는 시스템 명령 범위에 있어야 합니다.
-	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
-	ASSERT(IDM_ABOUTBOX < 0xF000);
+    CMenu* pSysMenu = GetSystemMenu(FALSE);
+    if (pSysMenu != nullptr)
+    {
+        BOOL bNameValid;
+        CString strAboutMenu;
+        bNameValid = strAboutMenu.LoadString(IDS_ABOUTBOX);
+        ASSERT(bNameValid);
+        if (!strAboutMenu.IsEmpty())
+        {
+            pSysMenu->AppendMenu(MF_SEPARATOR);
+            pSysMenu->AppendMenu(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
+        }
+    }
 
-	CMenu* pSysMenu = GetSystemMenu(FALSE);
-	if (pSysMenu != nullptr)
-	{
-		BOOL bNameValid;
-		CString strAboutMenu;
-		bNameValid = strAboutMenu.LoadString(IDS_ABOUTBOX);
-		ASSERT(bNameValid);
-		if (!strAboutMenu.IsEmpty())
-		{
-			pSysMenu->AppendMenu(MF_SEPARATOR);
-			pSysMenu->AppendMenu(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
-		}
-	}
+    // 이 대화 상자의 아이콘을 설정합니다.  응용 프로그램의 주 창이 대화 상자가 아닐 경우에는
+    //  프레임워크가 이 작업을 자동으로 수행합니다.
+    SetIcon(m_hIcon, TRUE);         // 큰 아이콘을 설정합니다.
+    SetIcon(m_hIcon, FALSE);        // 작은 아이콘을 설정합니다.
 
-	// 이 대화 상자의 아이콘을 설정합니다.  응용 프로그램의 주 창이 대화 상자가 아닐 경우에는
-	//  프레임워크가 이 작업을 자동으로 수행합니다.
-	SetIcon(m_hIcon, TRUE);         // 큰 아이콘을 설정합니다.
-	SetIcon(m_hIcon, FALSE);        // 작은 아이콘을 설정합니다.
+    // TODO: 여기에 추가 초기화 작업을 추가합니다.
 
-	// TODO: 여기에 추가 초기화 작업을 추가합니다.
-
-	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
+    return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
 
 void CMMORPGClientDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -313,6 +297,7 @@ void CMMORPGClientDlg::SetGameView()
 
 	m_testView = new CTestView();
 	m_testView->Create(NULL, NULL, WS_CHILD | WS_VISIBLE, rect, this, 1234);
+	m_testView->OnInitialUpdate();
 	m_testView->ShowWindow(SW_SHOW);
 }
 
@@ -382,6 +367,21 @@ void CMMORPGClientDlg::SetCallback()
 		{
 			auto* pCopy = new std::vector<S2CPlayerStateInfo>(users);
 			::SendMessage(m_testView->GetSafeHwnd(), WM_UPDATE_PLAYER_STATE, 0, reinterpret_cast<LPARAM>(pCopy));
+		}
+		});
+
+	m_network->SetPlayerMoveCallback([this](uint16_t userID, Direction direction) {
+		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
+		{
+			::SendMessage(m_testView->GetSafeHwnd(), WM_OTHER_PLAYER_MOVE, static_cast<WPARAM>(userID), static_cast<LPARAM>(direction));
+		}
+		});
+
+	m_network->SetPlayerPosSyncCallback([this](float x, float y, float z, uint32_t frameID) {
+		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
+		{
+			Vector3 position{ x, y, z };
+			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_POS_SYNC, static_cast<WPARAM>(frameID), *reinterpret_cast<LPARAM*>(&position));
 		}
 		});
 
