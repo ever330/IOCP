@@ -5,7 +5,7 @@
 #include "MainServer.h"
 
 Monster::Monster(int id, Vector3 spawnPos)
-	: m_id(id), m_maxHP(100), m_curHP(100), m_position(spawnPos)
+	: m_id(id), m_maxHP(100), m_curHP(100), m_position(spawnPos), m_isDead(false)
 {
 
 }
@@ -41,7 +41,7 @@ void Monster::Update(const std::unordered_set<unsigned int> mapUsers)
 	}
 }
 
-void Monster::TakeDamage(Direction dir, int damage, int knockbackDistance)
+std::optional<int> Monster::TakeDamage(Direction dir, int damage, int knockbackDistance)
 {
 	m_curHP -= damage;
 	if (m_curHP <= 0)
@@ -59,17 +59,26 @@ void Monster::TakeDamage(Direction dir, int damage, int knockbackDistance)
 		// 상하 방향 공격 시 y축으로 밀려남
 		m_position.y += (dir == Direction::Up ? -1.0f : 1.0f) * knockbackDistance;
 	}
+
+	if (m_curHP <= 0 && !m_isDead)
+	{
+		m_isDead = true;
+		return m_expReward;  // 예: 몬스터별 경험치 보상
+	}
+
+	return std::nullopt;
 }
 
 void Monster::Respawn(Vector3 spawnPos)
 {
 	m_curHP = m_maxHP;
 	m_position = spawnPos;
+	m_isDead = false;
 }
 
 bool Monster::IsDead() const
 {
-	return m_curHP <= 0;
+	return m_isDead;
 }
 
 unsigned int Monster::GetID() const

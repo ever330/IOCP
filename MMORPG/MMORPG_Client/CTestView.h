@@ -7,17 +7,18 @@
 #include "OtherPlayer.h"
 #include "Monster.h"
 #include "User.h"
+#include "Portal.h"
 
 class Network;
 
-class CTestView : public CView
+class CTestView : public CWnd
 {
 public:
     CTestView();
     virtual ~CTestView();
 
-    virtual void OnDraw(CDC* pDC);
-    virtual void OnInitialUpdate();
+    afx_msg void OnPaint();
+    void Initialize();
     virtual BOOL OnEraseBkgnd(CDC* pDC);
 
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
@@ -55,7 +56,8 @@ private:
     User* m_user;
     Direction m_playerDirection;
     std::unordered_map<uint16_t, std::unique_ptr<Monster>> m_monsters;
-    std::unordered_map<uint16_t, OtherPlayer> m_otherPlayers;
+    std::unordered_map<uint16_t, std::unique_ptr<OtherPlayer>> m_otherPlayers;
+	std::unordered_map<uint16_t, std::unique_ptr<Portal>> m_portals;
 
     // 공격 관련 멤버 변수
     DWORD m_lastAttackTime;

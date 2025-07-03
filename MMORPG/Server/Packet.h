@@ -10,6 +10,14 @@ enum PacketID : uint16_t
 	S2CLoginAck,
 	C2SSignUp,
 	S2CSignUpAck,
+	C2SCheckCharacterName,
+	S2CCheckCharacterNameAck,
+	C2SCreateCharacter,
+	S2CCreateCharacterAck,
+	C2SSelectCharacter,
+	S2CSelectCharacterAck,
+	C2SRanking,
+	S2CRankingAck,
 
 	// 기존 임시용
 	C2SSetName = 100,
@@ -27,6 +35,7 @@ enum PacketID : uint16_t
 	S2CPlayerEnter,
 	S2CPlayerLeave,
 	S2CPlayerState,
+	C2SChangeMapByPortal,
 
 	// 몬스터 관련
 	S2CMonsterRespawn = 400,
@@ -42,6 +51,7 @@ enum PacketID : uint16_t
 	S2CPlayerAttack,
 	C2SPlayerChat,
 	S2CPlayerChat,
+	S2CExpGain
 };
 
 #pragma pack(push, 1)
@@ -86,6 +96,16 @@ struct S2CLoginAckPacket
 	uint8_t Result; // 0: 성공, 1: 실패
 	uint16_t UserID; // 로그인 성공 시 사용자 ID 반환
 	char ID[ID_SIZE]; // 로그인 성공 시 사용자 이름 반환
+	uint16_t CharacterCount;
+};
+
+struct S2CCharacterInfo
+{
+	uint16_t CharacterID;
+	char Name[NAME_SIZE];
+	uint8_t Gender; // 0: 남성, 1: 여성
+	uint16_t Level;
+	uint32_t Exp;
 };
 
 struct C2SSignUpPacket
@@ -97,6 +117,66 @@ struct C2SSignUpPacket
 struct S2CSignUpAckPacket
 {
 	uint8_t Result; // 0: 성공, 1: 실패
+};
+
+struct C2SCheckCharacterNamePacket
+{
+	char Name[NAME_SIZE];
+};
+
+struct S2CCheckCharacterNameAckPacket
+{
+	uint8_t Result; // 0: 사용 가능, 1: 사용 불가
+};
+
+struct C2SCreateCharacterPacket
+{
+	char Name[NAME_SIZE];
+	uint8_t Gender; // 0: 남성, 1: 여성
+};
+
+struct S2CCreateCharacterAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+	uint16_t CharacterID;
+	char Name[NAME_SIZE];
+	uint8_t Gender; // 0: 남성, 1: 여성
+};
+
+struct C2SSelectCharacterPacket
+{
+	uint16_t CharacterID;
+};
+
+struct S2CSelectCharacterAckPacket
+{
+	uint8_t Result; // 0: 성공, 1: 실패
+	uint16_t CharacterID;
+	char Name[NAME_SIZE];
+	uint16_t Level;
+	uint32_t Exp;
+	float PosX;
+	float PosY;
+	float PosZ;
+	uint16_t MapID;
+};
+
+struct C2SRankingPacket
+{
+};
+
+struct S2CRankingInfo
+{
+	uint16_t CharacterID;
+	char Name[20];
+	uint16_t Level;
+};
+
+struct S2CRankingAckPacket
+{
+	uint8_t Count;
+	uint16_t MyRank;
+	S2CRankingInfo Rankers[10];
 };
 
 struct C2SSetNamePacket
@@ -133,6 +213,21 @@ struct S2CChangeMapAckPacket
 	float SpawnPosX;
 	float SpawnPosY;
 	float SpawnPosZ;
+	uint16_t PortalCount;
+};
+
+struct S2CChangeMapPortalInfo
+{
+	uint16_t PortalID;
+	float PosX;
+	float PosY;
+	float PosZ;
+	uint16_t TargetMapID;
+};
+
+struct C2SChangeMapByPortalPacket
+{
+	uint16_t PortalID;
 };
 
 struct S2CPlayerEnterPacket
@@ -264,5 +359,12 @@ struct S2CPlayerChatPacket
 	uint16_t UserID;
 	char Name[NAME_SIZE];
 	char ChatMsg[MSG_SIZE];
+};
+
+struct S2CExpGainPacket
+{
+	uint32_t ExpGained;
+	uint32_t TotalExp;
+	uint16_t Level;
 };
 #pragma pack(pop)

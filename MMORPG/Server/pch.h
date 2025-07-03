@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <random>
 #include <concurrent_queue.h>
+#include <optional>
 
 // Socket
 #include <winsock2.h>
@@ -31,6 +32,9 @@
 
 // DB
 #include <mysql/jdbc.h>
+
+// Redis
+#include <hiredis/hiredis.h>
 
 // 암호화용
 #include <openssl/sha.h>

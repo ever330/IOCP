@@ -9,6 +9,8 @@
 #include "CTestView.h"
 #include "User.h"
 
+class CRankingDialog;
+
 // CMMORPGClientDlg 대화 상자
 class CMMORPGClientDlg : public CDialogEx
 {
@@ -18,6 +20,8 @@ public:
 
 	void SetNetwork(Network* network) { m_network = network; }
 	void SetUser(User* user) { m_user = user; }
+	void ShowRankingDialog(uint16_t myRank, const std::vector<S2CRankingInfo>& rankings);
+	void OnRankingDialogClosed();
 
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
@@ -33,8 +37,8 @@ protected:
 	HICON m_hIcon;
 
 	Network* m_network;
-
 	User* m_user;
+	CRankingDialog* m_rankingDialog = nullptr; // 랭킹 대화 상자
 
 	CRichEditCtrl m_chatOutput; // 채팅 내용 출력 창
 	CChatInputEdit m_chatInput; // 입력창
@@ -44,13 +48,18 @@ protected:
 	CButton m_moveButton;
 
 	CStatic m_mapNameStatic;
-	CStatic m_userNicknameStatic;
+	CStatic m_nicknameStatic;
+	CStatic m_characterInfoStatic;
 
 	CTestView* m_testView = nullptr; // 맵 뷰
+
+	bool m_rankingRequested = false;
 
 	void AddChatMessage(const CString& message);
 	afx_msg void OnSendButtonClicked(); // 채팅 전송 버튼
 	afx_msg void OnMoveButtonClicked(); // 맵 이동 버튼
+	afx_msg void OnBnClickedRankingButton();
+	afx_msg LRESULT OnShowRanking(WPARAM wParam, LPARAM lParam);
 
 	void SetChatIO();
 	void SetMapList();

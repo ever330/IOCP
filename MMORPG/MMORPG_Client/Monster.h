@@ -15,7 +15,7 @@ public:
 	bool IsDead() const { return m_isDead; }
     void SetID(uint16_t monsterID);
 
-public:
+private:
     uint16_t m_monsterID;
     uint16_t m_spawnID;
 

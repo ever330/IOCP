@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pch.h"
+#include "CharacterData.h"
 
 struct DBRequest
 {
@@ -16,6 +17,8 @@ public:
 
     void Initialize(const std::string& host, const std::string& user, const std::string& password, const std::string& schema);
     void RequestQuery(const std::string& sql, std::function<void(bool, sql::ResultSet*)> callback);
+    void UpdateCharacterLevelAndExp(unsigned int characterID, unsigned int level, unsigned long exp);
+    std::vector<CharacterData> GetAllCharacters();
 
 private:
     void DBThreadLoop();

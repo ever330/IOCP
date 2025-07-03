@@ -95,6 +95,62 @@ void Network::Login(const std::string& name, const std::string& password)
 	delete[] buffer;
 }
 
+void Network::CharacterNameCheck(const std::string& name)
+{
+	C2SCheckCharacterNamePacket nameCheckPacket;
+	strcpy(nameCheckPacket.Name, name.c_str());
+	PacketBase pac;
+	pac.PacID = C2SCheckCharacterName;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(nameCheckPacket);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &nameCheckPacket, sizeof(nameCheckPacket));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::CreateCharacter(const std::string& name, const uint8_t gender)
+{
+	C2SCreateCharacterPacket createCharacterPacket;
+	strcpy(createCharacterPacket.Name, name.c_str());
+	createCharacterPacket.Gender = gender;
+	PacketBase pac;
+	pac.PacID = C2SCreateCharacter;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(createCharacterPacket);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &createCharacterPacket, sizeof(createCharacterPacket));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::SelectCharacter(const uint16_t characterID)
+{
+	C2SSelectCharacterPacket selectCharacterPacket;
+	selectCharacterPacket.CharacterID = characterID;
+	PacketBase pac;
+	pac.PacID = C2SSelectCharacter;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(selectCharacterPacket);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &selectCharacterPacket, sizeof(selectCharacterPacket));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::RequestRanking()
+{
+	C2SRankingPacket requestRankingPacket;
+	PacketBase pac;
+	pac.PacID = C2SRanking;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(requestRankingPacket);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &requestRankingPacket, sizeof(requestRankingPacket));
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
 void Network::SetName(const std::string& name)
 {
 	C2SSetNamePacket setName;
@@ -142,6 +198,20 @@ void Network::ChangeMap(unsigned int mapID)
 	memcpy(buffer, &pac, sizeof(pac));
 	memcpy(buffer + sizeof(pac), &changeMap, sizeof(changeMap));
 
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
+void Network::ChangeMapByPortal(unsigned int portalID)
+{
+	C2SChangeMapByPortalPacket changeMapByPortal;
+	changeMapByPortal.PortalID = portalID;
+	PacketBase pac;
+	pac.PacID = C2SChangeMapByPortal;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(changeMapByPortal);
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &changeMapByPortal, sizeof(changeMapByPortal));
 	send(m_socket, buffer, pac.PacketSize, 0);
 	delete[] buffer;
 }
@@ -222,7 +292,8 @@ void Network::RecvLoop()
 			PacketBase* pacRead = reinterpret_cast<PacketBase*>(packetBuf.data());
 			char* body = packetBuf.data() + sizeof(PacketBase);
 
-			HandlePacket(pacRead, body);
+			if (pacRead)
+				HandlePacket(pacRead, body);
 		}
 	}
 }
@@ -247,10 +318,45 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 	}
 	else if (pac->PacID == S2CLoginAck)
 	{
-		S2CLoginAckPacket ack;
-		memcpy(&ack, body, sizeof(ack));
+		S2CLoginAckPacket* loginAck = reinterpret_cast<S2CLoginAckPacket*>(pac->Body);
+		S2CCharacterInfo* characterList = reinterpret_cast<S2CCharacterInfo*>(pac->Body + sizeof(S2CLoginAckPacket));
+
+		std::vector<S2CCharacterInfo> characters;
+		for (int i = 0; i < loginAck->CharacterCount; ++i)
+			characters.push_back(characterList[i]);
+
 		if (m_loginResultHandler)
-			m_loginResultHandler(ack.Result, ack.UserID, ack.ID);
+			m_loginResultHandler(loginAck->Result, loginAck->UserID, loginAck->ID, characters);
+	}
+	else if (pac->PacID == S2CCheckCharacterNameAck)
+	{
+		S2CCheckCharacterNameAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+		if (m_checkNicknameResultHandler)
+			m_checkNicknameResultHandler(ack.Result);
+	}
+	else if (pac->PacID == S2CCreateCharacterAck)
+	{
+		S2CCreateCharacterAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+		if (m_createCharacterResultHandler)
+			m_createCharacterResultHandler(ack.Result, ack.CharacterID, ack.Gender, ack.Name);
+	}
+	else if (pac->PacID == S2CSelectCharacterAck)
+	{
+		S2CSelectCharacterAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+		if (m_selectCharacterResultHandler)
+			m_selectCharacterResultHandler(ack.Result, ack.CharacterID, ack.Name, ack.Level, ack.Exp);
+	}
+	else if (pac->PacID == S2CRankingAck)
+	{
+		S2CRankingAckPacket ack;
+		memcpy(&ack, body, sizeof(ack));
+		std::vector<S2CRankingInfo> rankings(ack.Count);
+		memcpy(rankings.data(), body + sizeof(uint8_t) + sizeof(uint16_t), sizeof(S2CRankingInfo) * ack.Count);
+		if (m_rankingResultHandler)
+			m_rankingResultHandler(ack.MyRank, rankings);
 	}
 	else if (pac->PacID == S2CPlayerChat)
 	{
@@ -263,10 +369,8 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 	}
 	else if (pac->PacID == S2CChangeMapAck)
 	{
-		S2CChangeMapAckPacket data;
-		memcpy(&data, body, sizeof(data));
 		if (m_mapChangeHandler)
-			m_mapChangeHandler(data.MapID, data.SpawnPosX, data.SpawnPosY);
+			m_mapChangeHandler(pac);
 	}
 	else if (pac->PacID == S2CMonsterState)
 	{
@@ -383,6 +487,12 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 		if (m_playerAttackHandler)
 			m_playerAttackHandler(attackInfo->UserID, (Direction)attackInfo->AttackDirection);
 	}
+	else if (pac->PacID == S2CExpGain)
+	{
+		const S2CExpGainPacket* expInfo = reinterpret_cast<const S2CExpGainPacket*>(body);
+		if (m_expGainHandler)
+			m_expGainHandler(expInfo->ExpGained, expInfo->TotalExp, expInfo->Level);
+	}
 	else
 	{
 		// 알 수 없는 패킷, 로그 출력하거나 무시
@@ -403,6 +513,26 @@ void Network::SetSignUpResultCallback(SignUpResultHandler handler)
 void Network::SetLoginResultCallback(LoginResultHandler handler)
 {
 	m_loginResultHandler = handler;
+}
+
+void Network::SetCheckNicknameResultCallback(CheckNicknameResultHandler handler)
+{
+	m_checkNicknameResultHandler = handler;
+}
+
+void Network::SetCreateCharacterResultCallback(CreateCharacterResultHandler handler)
+{
+	m_createCharacterResultHandler = handler;
+}
+
+void Network::SetSelectCharacterResultCallback(SelecteCharacterResultHandler handler)
+{
+	m_selectCharacterResultHandler = handler;
+}
+
+void Network::SetRankingResultCallback(RankingResultHandler handler)
+{
+	m_rankingResultHandler = handler;
 }
 
 void Network::SetMessageCallback(MessageHandler handler)
@@ -458,4 +588,9 @@ void Network::SetMonsterRespawnCallback(MonsterRespawnHandler handler)
 void Network::SetPlayerAttackCallback(PlayerAttackHandler handler)
 {
 	m_playerAttackHandler = handler;
+}
+
+void Network::SetExpGainCallback(ExpGainHandler handler)
+{
+	m_expGainHandler = handler;
 }

@@ -7,6 +7,7 @@
 #include "MMORPG_ClientDlg.h"
 #include "afxdialogex.h"
 #include "Resource.h"
+#include "CRankingDialog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -56,6 +57,38 @@ CMMORPGClientDlg::CMMORPGClientDlg(CWnd* pParent /*=nullptr*/)
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
+void CMMORPGClientDlg::ShowRankingDialog(uint16_t myRank, const std::vector<S2CRankingInfo>& rankings)
+{
+	if (m_rankingDialog && ::IsWindow(m_rankingDialog->GetSafeHwnd()))
+	{
+		m_rankingDialog->SetRankingData(myRank, rankings);
+		m_rankingDialog->ShowWindow(SW_SHOW);
+		m_rankingDialog->SetForegroundWindow();
+		return;
+	}
+
+	m_rankingDialog = new CRankingDialog();
+	m_rankingDialog->SetRankingData(myRank, rankings);
+	// 새로 생성
+	if (!m_rankingDialog->Create(IDD_RANKING_DIALOG, this))
+	{
+		AfxMessageBox(_T("랭킹 다이얼로그 생성 실패"));
+		delete m_rankingDialog;
+		m_rankingDialog = nullptr;
+		return;
+	}
+	m_rankingDialog->ShowWindow(SW_SHOW);
+}
+
+void CMMORPGClientDlg::OnRankingDialogClosed()
+{
+	if (m_rankingDialog)
+	{
+		delete m_rankingDialog;
+		m_rankingDialog = nullptr;
+	}
+}
+
 void CMMORPGClientDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
@@ -67,6 +100,8 @@ BEGIN_MESSAGE_MAP(CMMORPGClientDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_SEND_BUTTON, &CMMORPGClientDlg::OnSendButtonClicked)
 	ON_BN_CLICKED(IDC_MOVE_BUTTON, &CMMORPGClientDlg::OnMoveButtonClicked)
+	ON_BN_CLICKED(IDC_RANKING_BUTTON, &CMMORPGClientDlg::OnBnClickedRankingButton)
+	ON_MESSAGE(WM_SHOW_RANKING, &CMMORPGClientDlg::OnShowRanking)
 END_MESSAGE_MAP()
 
 
@@ -80,14 +115,22 @@ BOOL CMMORPGClientDlg::OnInitDialog()
 {
     CDialogEx::OnInitDialog();
 
-    SetChatIO();
-    SetMapList();
-    SetGameView();
-    SetCallback();
-    m_userNicknameStatic.SubclassDlgItem(IDC_NICKNAME, this);
+	SetChatIO();
+	SetMapList();
+	SetGameView();
+	SetCallback();
+
+    m_nicknameStatic.SubclassDlgItem(IDC_NICKNAME, this);
+	m_characterInfoStatic.SubclassDlgItem(IDC_INGAME_INFO, this);
 
     CString userNickname = CString(m_user->GetUsername().c_str());
-    m_userNicknameStatic.SetWindowText(userNickname);
+    m_nicknameStatic.SetWindowText(userNickname);
+	CString characterInfo;
+	const auto& character = m_user->GetActiveCharacter();
+
+	characterInfo.Format(_T("레벨: %d	경험치: %u"), character.Level, character.Experience);
+
+	m_characterInfoStatic.SetWindowText(characterInfo);
 
     m_testView->SetNetwork(m_network);
 	m_testView->SetUser(m_user);
@@ -296,9 +339,14 @@ void CMMORPGClientDlg::SetGameView()
 	ScreenToClient(&rect);
 
 	m_testView = new CTestView();
-	m_testView->Create(NULL, NULL, WS_CHILD | WS_VISIBLE, rect, this, 1234);
-	m_testView->OnInitialUpdate();
-	m_testView->ShowWindow(SW_SHOW);
+	if (!m_testView->Create(NULL, NULL, WS_CHILD | WS_VISIBLE, rect, this, 1234))
+	{
+		AfxMessageBox(_T("CTestView 생성 실패"));
+		delete m_testView;
+		m_testView = nullptr;
+		return;
+	}
+	m_testView->Initialize();
 }
 
 void CMMORPGClientDlg::SetCallback()
@@ -308,14 +356,16 @@ void CMMORPGClientDlg::SetCallback()
 		AddChatMessage(cstrMessage);
 		});
 
-	m_network->SetMapChangeCallback([this](uint16_t mapID, float x, float y) {
+	m_network->SetMapChangeCallback([this](PacketBase* pac) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
-			::SendMessage(m_testView->GetSafeHwnd(), WM_MAP_CHANGE, x, y);
+			::SendMessage(m_testView->GetSafeHwnd(), WM_MAP_CHANGE, 0, reinterpret_cast<LPARAM>(pac));
 		}
 
+		S2CChangeMapAckPacket data = *reinterpret_cast<S2CChangeMapAckPacket*>(pac->Body);
+
 		CString mapName;
-		switch (mapID)
+		switch (data.MapID)
 		{
 		case 1001: mapName = L"초원1"; break;
 		case 1002: mapName = L"초원2"; break;
@@ -334,7 +384,7 @@ void CMMORPGClientDlg::SetCallback()
 		m_mapNameStatic.SetWindowText(mapName);
 
 		CString msg;
-		msg.Format(L"[맵 이동] %s (맵 ID: %d) 위치: (%f, %f)", (LPCTSTR)mapName, mapID, x, y);
+		msg.Format(L"[맵 이동] %s (맵 ID: %d)", (LPCTSTR)mapName, data.MapID);
 		AddChatMessage(msg);
 		});
 
@@ -407,6 +457,29 @@ void CMMORPGClientDlg::SetCallback()
 			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_ATTACK, static_cast<WPARAM>(userID), static_cast<LPARAM>(dir));
 		}
 		});
+
+	m_network->SetExpGainCallback([this](uint16_t expGained, uint16_t totalExp, uint16_t level) {
+		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
+		{
+			CString msg;
+			msg.Format(L"경험치 획득: %d, 총 경험치: %d, 레벨: %d", expGained, totalExp, level);
+			AddChatMessage(msg);
+			m_user->SetExperience(totalExp);
+			m_user->SetLevel(level);
+
+			CString characterInfo;
+			const auto& character = m_user->GetActiveCharacter();
+
+			characterInfo.Format(_T("레벨: %d	경험치: %u"), character.Level, character.Experience);
+
+			m_characterInfoStatic.SetWindowText(characterInfo);
+		}
+		});
+
+	m_network->SetRankingResultCallback([this](const uint16_t myRanking, const std::vector<S2CRankingInfo>& rankings) {
+		auto copied = new std::vector<S2CRankingInfo>(rankings);
+		PostMessage(WM_SHOW_RANKING, myRanking, reinterpret_cast<LPARAM>(copied));
+		});
 }
 
 void CMMORPGClientDlg::OnClose()
@@ -437,4 +510,28 @@ void CMMORPGClientDlg::OnCancel()
 	}
 
 	CDialogEx::OnCancel();
+}
+void CMMORPGClientDlg::OnBnClickedRankingButton()
+{
+	if (m_rankingRequested)
+	{
+		AfxMessageBox(L"랭킹 요청이 이미 진행 중입니다.");
+		return;
+	}
+
+	m_network->RequestRanking(); // 서버에 랭킹 요청 패킷 전송
+
+	m_rankingRequested = true;
+}
+
+LRESULT CMMORPGClientDlg::OnShowRanking(WPARAM wParam, LPARAM lParam)
+{
+	uint16_t myRanking = static_cast<uint16_t>(wParam);
+	std::vector<S2CRankingInfo>* rankings = reinterpret_cast<std::vector<S2CRankingInfo>*>(lParam);
+
+	m_rankingRequested = false;
+	ShowRankingDialog(myRanking, *rankings);
+
+	delete rankings; // new 했던 것 반드시 해제
+	return 0;
 }

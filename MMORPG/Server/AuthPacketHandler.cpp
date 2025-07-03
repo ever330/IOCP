@@ -66,39 +66,98 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 	std::string username = EscapeSQL(std::string(loginPacket.ID));
 	std::string passwordHash = Sha256(std::string(loginPacket.Password));
 
-	std::string query = "SELECT UserID, Username FROM Users WHERE Username = '" + username +
+	std::string query =
+		"SELECT UserID, Username FROM Users WHERE Username = '" + username +
 		"' AND PasswordHash = '" + passwordHash + "' AND IsBanned = 0;";
 
-	MainServer::Instance().RequestQuery(query, [sessionID](bool success, sql::ResultSet* res) {
-		S2CLoginAckPacket ack{};
-		ack.Result = 1;
-
-		if (success && res && res->next())
+	MainServer::Instance().RequestQuery(query, [sessionID](bool success, sql::ResultSet* res)
 		{
+			S2CLoginAckPacket ack{};
+			ack.Result = 1;
+
+			if (!success || !res || !res->next())
+			{
+				delete res;
+
+				// 로그인 실패 패킷 전송
+				int packetSize = sizeof(PacketBase) + sizeof(S2CLoginAckPacket);
+				std::shared_ptr<char[]> buffer(new char[packetSize]);
+				PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
+				newPac->PacID = S2CLoginAck;
+				newPac->PacketSize = packetSize;
+				memcpy(newPac->Body, &ack, sizeof(S2CLoginAckPacket));
+				MainServer::Instance().SendPacketBySessionID(sessionID, newPac);
+				return;
+			}
+
+			// 로그인 성공 처리
 			ack.Result = 0;
 			ack.UserID = res->getInt("UserID");
 			std::string name = res->getString("Username");
-
 			memset(ack.ID, 0, ID_SIZE);
 			memcpy(ack.ID, name.c_str(), min(name.size(), static_cast<size_t>(ID_SIZE - 1)));
 
-			// 로그인 성공 시, User 객체 생성 및 등록
 			auto user = std::make_shared<User>(ack.UserID, name);
 			MainServer::Instance().AddUser(user);
-			MainServer::Instance().BindSession(sessionID, user); // sessionID ↔ userID 매핑
-		}
+			MainServer::Instance().BindSession(sessionID, user);
 
-		delete res;
+			delete res;
 
-		int packetSize = sizeof(PacketBase) + sizeof(S2CLoginAckPacket);
-		std::shared_ptr<char[]> buffer(new char[packetSize]);
+			// 캐릭터 목록 쿼리
+			std::string charQuery =
+				"SELECT CharID, Name, Level, Exp, Gender FROM Characters WHERE UserID = " + std::to_string(ack.UserID) + ";";
 
-		PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
-		newPac->PacID = S2CLoginAck;
-		newPac->PacketSize = packetSize;
-		memcpy(newPac->Body, &ack, sizeof(S2CLoginAckPacket));
+			MainServer::Instance().RequestQuery(charQuery, [sessionID, ack](bool success2, sql::ResultSet* charRes) mutable
+				{
+					std::vector<S2CCharacterInfo> characters;
 
-		MainServer::Instance().SendPacketBySessionID(sessionID, newPac);
+					if (success2 && charRes)
+					{
+						while (charRes->next())
+						{
+							S2CCharacterInfo info{};
+							info.CharacterID = charRes->getInt("CharID");
+
+							std::string charName = charRes->getString("Name");
+							memset(info.Name, 0, NAME_SIZE);
+							memcpy(info.Name, charName.c_str(), min(charName.size(), static_cast<size_t>(NAME_SIZE - 1)));
+
+							info.Level = charRes->getInt("Level");
+							info.Exp = charRes->getInt("Exp");
+							info.Gender = static_cast<uint8_t>(charRes->getInt("Gender"));
+
+							characters.push_back(info);
+						}
+					}
+
+					delete charRes;
+
+					// 캐릭터 수 반영
+					ack.CharacterCount = static_cast<uint16_t>(characters.size());
+
+					// 전체 패킷 크기 = PacketBase + LoginAck + characterInfo * N
+					int packetSize = sizeof(PacketBase)
+						+ sizeof(S2CLoginAckPacket)
+						+ sizeof(S2CCharacterInfo) * characters.size();
+
+					std::shared_ptr<char[]> buffer(new char[packetSize]);
+
+					PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
+					newPac->PacID = S2CLoginAck;
+					newPac->PacketSize = packetSize;
+
+					char* writePtr = newPac->Body;
+
+					// 1. 로그인 응답 패킷
+					memcpy(writePtr, &ack, sizeof(S2CLoginAckPacket));
+					writePtr += sizeof(S2CLoginAckPacket);
+
+					// 2. 캐릭터 정보들 붙이기
+					if (!characters.empty())
+						memcpy(writePtr, characters.data(), sizeof(S2CCharacterInfo) * characters.size());
+
+					MainServer::Instance().SendPacketBySessionID(sessionID, newPac);
+				});
 		});
 }
 

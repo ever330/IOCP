@@ -25,6 +25,15 @@
     <Filter Include="Edit">
       <UniqueIdentifier>{f502c29d-53ef-4abf-8ea6-947e6917672d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Monster">
+      <UniqueIdentifier>{2f3fa661-e104-4fa2-9975-fbe8610ab8c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Portal">
+      <UniqueIdentifier>{4e68ae6c-68d6-4eed-9d00-2f3a32caa7a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="User">
+      <UniqueIdentifier>{3bada653-fc8e-4338-9548-df4411be772a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MMORPG_Client.h">
@@ -57,9 +66,6 @@
     <ClInclude Include="Util.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="Monster.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="Vector3.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -84,8 +90,23 @@
     <ClInclude Include="CChatInputEdit.h">
       <Filter>Edit</Filter>
     </ClInclude>
+    <ClInclude Include="Monster.h">
+      <Filter>Monster</Filter>
+    </ClInclude>
+    <ClInclude Include="Portal.h">
+      <Filter>Portal</Filter>
+    </ClInclude>
+    <ClInclude Include="CCharacterSelectDialog.h">
+      <Filter>Dialog</Filter>
+    </ClInclude>
     <ClInclude Include="User.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>User</Filter>
+    </ClInclude>
+    <ClInclude Include="CCreateCharacterDialog.h">
+      <Filter>Dialog</Filter>
+    </ClInclude>
+    <ClInclude Include="CRankingDialog.h">
+      <Filter>Dialog</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -93,9 +114,6 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Monster.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="CLoginDialog.cpp">
@@ -118,6 +136,24 @@
     </ClCompile>
     <ClCompile Include="CChatInputEdit.cpp">
       <Filter>Edit</Filter>
+    </ClCompile>
+    <ClCompile Include="Monster.cpp">
+      <Filter>Monster</Filter>
+    </ClCompile>
+    <ClCompile Include="Portal.cpp">
+      <Filter>Portal</Filter>
+    </ClCompile>
+    <ClCompile Include="CCharacterSelectDialog.cpp">
+      <Filter>Dialog</Filter>
+    </ClCompile>
+    <ClCompile Include="User.cpp">
+      <Filter>User</Filter>
+    </ClCompile>
+    <ClCompile Include="CCreateCharacterDialog.cpp">
+      <Filter>Dialog</Filter>
+    </ClCompile>
+    <ClCompile Include="CRankingDialog.cpp">
+      <Filter>Dialog</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

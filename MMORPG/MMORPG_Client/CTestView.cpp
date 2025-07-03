@@ -2,7 +2,7 @@
 #include "Network.h"
 #include "Vector3.h"
 
-BEGIN_MESSAGE_MAP(CTestView, CView)
+BEGIN_MESSAGE_MAP(CTestView, CWnd)
 	ON_WM_GETDLGCODE()
 	ON_WM_LBUTTONDOWN()
 	ON_MESSAGE(WM_UPDATE_MONSTER_STATE, &CTestView::OnUpdateMonsterState)
@@ -18,22 +18,21 @@ BEGIN_MESSAGE_MAP(CTestView, CView)
 	ON_WM_KEYDOWN()
 	ON_WM_KEYUP()
 	ON_WM_TIMER()
+	ON_WM_PAINT()
+	ON_WM_ERASEBKGND()
 END_MESSAGE_MAP()
 
-CTestView::CTestView()
+CTestView::CTestView() 
 {
-	// 초기 위치 설정
 	m_playerPos = CPoint(100, 100);
 	m_network = nullptr;
 	m_lastAttackTime = 0;
 	m_attackStartTime = 0;
 	m_isAttacking = false;
 	m_isMoving = false;
-
 	m_attackDirection = Direction::Up;
 	m_playerDirection = Direction::Up;
 	m_user = nullptr;
-
 	m_currentFrameID = 0;
 }
 
@@ -46,37 +45,30 @@ BOOL CTestView::OnEraseBkgnd(CDC* pDC)
 	return TRUE;  // 깜빡임 방지 효과
 }
 
-void CTestView::OnDraw(CDC* pDC)
+void CTestView::OnPaint() 
 {
+	CPaintDC dc(this);
 	CRect rect;
 	GetClientRect(&rect);
-
 	CDC memDC;
-	memDC.CreateCompatibleDC(pDC);
-
+	memDC.CreateCompatibleDC(&dc);
 	CBitmap bitmap;
-	bitmap.CreateCompatibleBitmap(pDC, rect.Width(), rect.Height());
+	bitmap.CreateCompatibleBitmap(&dc, rect.Width(), rect.Height());
 	CBitmap* pOldBitmap = memDC.SelectObject(&bitmap);
-
-	// 실제 게임 씬을 메모리 DC에 그리기
 	DrawScene(&memDC);
-
-	// 최종적으로 화면에 복사
-	pDC->BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
-
+	dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
 	memDC.SelectObject(pOldBitmap);
 }
 
-void CTestView::OnInitialUpdate()
+void CTestView::Initialize() 
 {
-	CView::OnInitialUpdate();
-
 	UINT_PTR timerID = SetTimer(1, 100, nullptr);
 	if (timerID == 0) {
 		AfxMessageBox(_T("타이머 설정 실패!"));
 	}
 	m_lastUpdateTime = std::chrono::steady_clock::now();
 }
+
 
 void CTestView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
@@ -104,6 +96,21 @@ void CTestView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 		Invalidate(FALSE);
 		return; // 여기서 끝냄 (아래 이동 로직 실행 X)
 	}
+	else if (nChar == VK_UP)
+	{
+		for (auto& portal : m_portals)
+		{
+			Vector3 pos = Vector3(m_playerPos.x, m_playerPos.y, 0.0f);
+			if (portal.second->OnEnter(pos))
+			{
+				if (m_network)
+				{
+					m_network->ChangeMapByPortal(portal.first);
+				}
+				return; // 포탈 클릭 시 이동 로직 실행 X
+			}
+		}
+	}
 
 	switch (nChar)
 	{
@@ -125,7 +132,7 @@ void CTestView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 	}
 
 	Invalidate(FALSE);
-	CView::OnKeyDown(nChar, nRepCnt, nFlags);
+	CWnd::OnKeyDown(nChar, nRepCnt, nFlags);
 }
 
 void CTestView::OnKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
@@ -147,25 +154,18 @@ void CTestView::OnKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
 			m_network->PlayerStop(m_currentFrameID);
 	}
 
-	CView::OnKeyUp(nChar, nRepCnt, nFlags);
+	CWnd::OnKeyUp(nChar, nRepCnt, nFlags);
 }
 
-void CTestView::OnLButtonDown(UINT nFlags, CPoint point)
+void CTestView::OnLButtonDown(UINT nFlags, CPoint point) 
 {
-	CFrameWnd* pFrame = GetParentFrame();
-	if (pFrame)
-	{
-		pFrame->SetActiveView(this);
-	}
-
 	SetFocus();
-
-	CView::OnLButtonDown(nFlags, point);
+	CWnd::OnLButtonDown(nFlags, point);
 }
 
 UINT CTestView::OnGetDlgCode()
 {
-	return DLGC_WANTARROWS | CView::OnGetDlgCode();
+	return DLGC_WANTARROWS | CWnd::OnGetDlgCode();
 }
 
 void CTestView::DrawScene(CDC* pDC)
@@ -176,6 +176,12 @@ void CTestView::DrawScene(CDC* pDC)
 	// 배경
 	pDC->FillSolidRect(&rect, RGB(255, 255, 255));
 
+	// 포탈
+	for (auto& portal : m_portals)
+	{
+		portal.second->Render(pDC);
+	}
+
 	// 몬스터
 	for (auto& monster : m_monsters)
 	{
@@ -185,11 +191,11 @@ void CTestView::DrawScene(CDC* pDC)
 	// 다른 플레이어들
 	for (const auto& player : m_otherPlayers)
 	{
-		int x = static_cast<int>(player.second.position.x);
-		int y = static_cast<int>(player.second.position.y);
+		int x = static_cast<int>(player.second->position.x);
+		int y = static_cast<int>(player.second->position.y);
 
 		// 글자 크기 측정
-		CString name = player.second.name;
+		CString name = player.second->name;
 		CSize textSize = pDC->GetTextExtent(name);
 
 		// 배경 사각형 출력
@@ -331,21 +337,17 @@ void CTestView::ClampPosition(CPoint& pos)
 		pos.y = MAP_MAX_Y + 10;
 }
 
-void CTestView::OnTimer(UINT_PTR nIDEvent)
+void CTestView::OnTimer(UINT_PTR nIDEvent) 
 {
-	if (nIDEvent == 1)
+	if (nIDEvent == 1) 
 	{
 		auto now = std::chrono::steady_clock::now();
 		float deltaTime = std::chrono::duration<float>(now - m_lastUpdateTime).count();
-
 		UpdatePlayer(deltaTime);
-
 		m_lastUpdateTime = now;
-
 		Invalidate(FALSE);
 	}
-
-	CView::OnTimer(nIDEvent);
+	CWnd::OnTimer(nIDEvent);
 }
 
 LRESULT CTestView::OnUpdateMonsterState(WPARAM wParam, LPARAM lParam)
@@ -381,8 +383,25 @@ LRESULT CTestView::OnUpdateMonsterState(WPARAM wParam, LPARAM lParam)
 
 LRESULT CTestView::OnMapChange(WPARAM wParam, LPARAM lParam)
 {
-	m_playerPos.x = wParam;
-	m_playerPos.y = lParam;
+	PacketBase* pac = reinterpret_cast<PacketBase*>(lParam);
+	S2CChangeMapAckPacket* changeMap = reinterpret_cast<S2CChangeMapAckPacket*>(pac->Body);
+
+	std::vector<S2CChangeMapPortalInfo> portals(changeMap->PortalCount);
+	memcpy(portals.data(), pac->Body + sizeof(S2CChangeMapAckPacket), sizeof(S2CChangeMapPortalInfo) * changeMap->PortalCount);
+	m_portals.clear();
+
+	for (const auto& portal : portals)
+	{
+		auto info = std::make_unique<Portal>(
+			static_cast<unsigned int>(portal.PortalID),
+			Vector3(portal.PosX, portal.PosY, portal.PosZ),
+			portal.TargetMapID
+		);
+		m_portals[portal.PortalID] = std::move(info);
+	}
+
+	m_playerPos.x = changeMap->SpawnPosX;
+	m_playerPos.y = changeMap->SpawnPosY;
 
 	Invalidate(false);
 
@@ -391,11 +410,12 @@ LRESULT CTestView::OnMapChange(WPARAM wParam, LPARAM lParam)
 
 LRESULT CTestView::OnPlayerEnter(WPARAM wParam, LPARAM lParam)
 {
-	auto* pInfo = reinterpret_cast<OtherPlayer*>(lParam);
-	if (pInfo && m_user->GetUserId() != pInfo->userID)
+	auto rawPtr = reinterpret_cast<OtherPlayer*>(lParam);
+	std::unique_ptr<OtherPlayer> otherPlayer(rawPtr);
+
+	if (otherPlayer && m_user->GetUserId() != otherPlayer->userID)
 	{
-		m_otherPlayers.insert({ pInfo->userID, *pInfo });
-		delete pInfo;
+		m_otherPlayers[otherPlayer->userID] = std::move(otherPlayer);
 		Invalidate(false);
 	}
 
@@ -422,18 +442,17 @@ LRESULT CTestView::OnUpdatePlayerState(WPARAM wParam, LPARAM lParam)
 
 		for (const auto& info : *pInfo)
 		{
-			OtherPlayer player;
-			player.userID = info.UserID;
+			auto player = std::make_unique<OtherPlayer>();
+			player->userID = info.UserID;
 			CA2W nameConverter(info.Name);
-			player.name = nameConverter;
+			player->name = nameConverter;
 
-			player.position.x = info.PosX;
-			player.position.y = info.PosY;
-			player.userID = info.UserID;
+			player->position.x = info.PosX;
+			player->position.y = info.PosY;
 
-			if (player.userID != m_user->GetUserId())
+			if (player->userID != m_user->GetUserId())
 			{
-				m_otherPlayers.insert({ player.userID, player });
+				m_otherPlayers[player->userID] = std::move(player);
 			}
 		}
 		delete pInfo;
@@ -453,16 +472,16 @@ LRESULT CTestView::OnOtherPlayerMove(WPARAM wParam, LPARAM lParam)
 		switch (direction)
 		{
 		case Direction::Left:
-			it->second.position.x -= 10;
+			it->second->position.x -= 10;
 			break;
 		case Direction::Right:
-			it->second.position.x += 10;
+			it->second->position.x += 10;
 			break;
 		case Direction::Up:
-			it->second.position.y -= 10;
+			it->second->position.y -= 10;
 			break;
 		case Direction::Down:
-			it->second.position.y += 10;
+			it->second->position.y += 10;
 			break;
 		default:
 			break;
@@ -595,8 +614,8 @@ LRESULT CTestView::OnPlayerAttack(WPARAM wParam, LPARAM lParam)
 	if (it != m_otherPlayers.end())
 	{
 		CPoint pos;
-		pos.x = it->second.position.x;
-		pos.y = it->second.position.y;
+		pos.x = it->second->position.x;
+		pos.y = it->second->position.y;
 
 		AttackInfo info;
 		info.startTime = GetTickCount64();
@@ -610,8 +629,8 @@ LRESULT CTestView::OnPlayerAttack(WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-BOOL CTestView::PreCreateWindow(CREATESTRUCT& cs)
+BOOL CTestView::PreCreateWindow(CREATESTRUCT& cs) 
 {
 	cs.style |= WS_CHILD | WS_VISIBLE | WS_TABSTOP;
-	return CView::PreCreateWindow(cs);
+	return CWnd::PreCreateWindow(cs);
 }

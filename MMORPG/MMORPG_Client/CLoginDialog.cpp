@@ -1,6 +1,5 @@
 #include "pch.h"
-#include "MMORPG_Client.h"
-#include "afxdialogex.h"
+#include "resource.h"
 #include "CLoginDialog.h"
 #include "CSignUpDialog.h"
 
@@ -43,14 +42,16 @@ BOOL CLoginDialog::OnInitDialog()
 
     if (m_network)
     {
-        m_network->SetLoginResultCallback([this](uint8_t result, uint16_t userId, const char* id)
+        m_network->SetLoginResultCallback([this](uint8_t result, uint16_t userId, const char* id, const std::vector<S2CCharacterInfo>& characters)
             {
                 if (result == 0)
                 {
-					m_user->SetUserId(userId);
-					std::string idStr(id);
-					m_user->SetUsername(idStr);
-                    PostMessage(WM_LOGIN_SUCCESS);
+                    m_user->SetUserId(userId);
+                    m_user->SetUsername(std::string(id));
+                    m_user->SetCharacters(characters); // m_user에 캐릭터 목록 저장
+
+                    // 로그인 성공 → 캐릭터 선택 다이얼로그 띄우기
+                    PostMessage(WM_LOGIN_SUCCESS);  // 혹은 직접 실행
                 }
                 else
                 {

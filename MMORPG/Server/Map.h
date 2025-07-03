@@ -7,6 +7,14 @@
 class User;
 class Monster;
 
+struct Portal
+{
+	unsigned int ID;
+	unsigned int TargetMapID;
+	Vector3 Position;
+	Vector3 SpawnPosition;
+};
+
 class Map
 {
 public:
@@ -15,6 +23,11 @@ public:
 
 	void Initialize();
 	void Update(float deltaTime, int tickCount);
+
+	void AddPortal(unsigned int targetMapID, Vector3 position, Vector3 spawnPosition);
+	Portal GetPortal(unsigned int id) const;
+	std::unordered_map<unsigned int, Portal> GetPortals() const;
+	unsigned int GetPortalCount() const;
 
 	void AddUser(std::shared_ptr<User> user);
 	void RemoveUser(std::shared_ptr<User> user);
@@ -34,6 +47,8 @@ private:
 	std::unordered_set<unsigned int> m_users;
 	std::unordered_map<unsigned int, std::shared_ptr<Monster>> m_monsters;
 	Vector3 m_userSpawnPos;
+
+	std::unordered_map<unsigned int, Portal> m_portals;
 
 	int m_responseCount;
 

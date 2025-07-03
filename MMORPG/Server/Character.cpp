@@ -1,8 +1,8 @@
 #include "Character.h"
 #include "MainServer.h"
 
-Character::Character(Vector3 spawnPos)
-	: m_maxHP(100), m_curHP(100), m_position(spawnPos), m_direction(0)
+Character::Character(unsigned int id, std::string name, unsigned int level, unsigned long exp)
+	: m_characterID(id), m_name(name), m_level(level), m_exp(exp), m_maxHP(100), m_curHP(100), m_position(0, 0, 0), m_direction(0), m_isDirty(false)
 {
 	// Character »ý¼º
 }
@@ -31,6 +31,11 @@ bool Character::IsDead() const
 	return m_curHP <= 0;
 }
 
+unsigned int Character::GetID() const
+{
+	return m_characterID;
+}
+
 unsigned int Character::GetMaxHp() const
 {
 	return m_maxHP;
@@ -39,6 +44,11 @@ unsigned int Character::GetMaxHp() const
 unsigned int Character::GetCurHp() const
 {
 	return m_curHP;
+}
+
+void Character::SetPosition(Vector3 pos)
+{
+	m_position = pos;
 }
 
 Vector3 Character::GetPosition() const
@@ -59,6 +69,43 @@ void Character::SetDirection(uint8_t dir)
 void Character::SetMoving(bool moving)
 {
 	m_isMoving = moving;
+}
+
+void Character::AddExp(int exp)
+{
+	m_exp += exp;
+	m_isDirty = true;
+	while (m_exp >= GetRequiredExpForLevel(m_level))
+	{
+		m_exp -= GetRequiredExpForLevel(m_level);
+		++m_level;
+		MainServer::Instance().UserLevelSave(this);
+	}
+}
+
+int Character::GetExp()
+{
+	return m_exp;
+}
+
+int Character::GetLevel()
+{
+	return m_level;
+}
+
+std::string Character::GetName() const
+{
+	return m_name;
+}
+
+bool Character::IsDirty() const
+{
+	return m_isDirty;
+}
+
+void Character::ClearDirty()
+{
+	m_isDirty = false;
 }
 
 void Character::Move(float deltaTime)
@@ -91,4 +138,9 @@ void Character::Move(float deltaTime)
 
 	std::string logMessage = "Character moved to position: (" + std::to_string(m_position.x) + ", " + std::to_string(m_position.y) + ")";
 	MainServer::Instance().Log(logMessage);
+}
+
+int Character::GetRequiredExpForLevel(int level)
+{
+	return 100 + (level - 1) * 50;
 }

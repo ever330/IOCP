@@ -1,4 +1,6 @@
 #pragma once
+
+#include "pch.h"
 #include "afxdialogex.h"
 #include "Network.h"
 

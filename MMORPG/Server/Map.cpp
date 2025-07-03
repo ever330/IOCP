@@ -28,8 +28,13 @@ void Map::Initialize()
 
 void Map::Update(float deltaTime, int tickCount)
 {
+	// 맵에 유저가 없으면 업데이트 하지 않음
+	if (m_users.empty())
+		return;
+
 	// 유저 업데이트
-	for (int userID : m_users) {
+	for (int userID : m_users)
+	{
 		std::shared_ptr<User> user = MainServer::Instance().GetUserByID(userID);
 
 		if (!user)
@@ -45,7 +50,8 @@ void Map::Update(float deltaTime, int tickCount)
 	}
 
 	// 10틱마다 유저 좌표 상태 브로드캐스트
-	if (tickCount % 10 == 0) {
+	if (tickCount % 10 == 0) 
+	{
 		PlayerStateUpdate();  // 유저 좌표 상태 전체 브로드캐스트
 	}
 
@@ -58,6 +64,38 @@ void Map::Update(float deltaTime, int tickCount)
 	}
 
 	m_responseCount++;
+}
+
+void Map::AddPortal(unsigned int targetMapID, Vector3 position, Vector3 spawnPosition)
+{
+	Portal portal;
+	portal.TargetMapID = targetMapID;
+	portal.Position = position;
+	portal.SpawnPosition = spawnPosition;
+
+	int portalID = static_cast<int>(m_portals.size()) + 1;
+	m_portals.insert({ portalID, portal });
+}
+
+Portal Map::GetPortal(unsigned int id) const
+{
+	auto it = m_portals.find(id);
+
+	if (it == m_portals.end())
+	{
+		throw std::runtime_error("Portal not found");
+	}
+	return it->second;
+}
+
+std::unordered_map<unsigned int, Portal> Map::GetPortals() const
+{
+	return m_portals;
+}
+
+unsigned int Map::GetPortalCount() const
+{
+	return m_portals.size();
 }
 
 void Map::AddUser(std::shared_ptr<User> user)
@@ -158,13 +196,21 @@ void Map::PlayerAttack(std::shared_ptr<User> user, C2SPlayerAttackPacket pac)
 
 		if (hitBox.Contains(monPos))
 		{
-			monster.second.get()->TakeDamage(dir, 20, 40);
-			
+			auto expOpt = monster.second->TakeDamage(dir, 20, 40);
+
 			S2CMonsterHitInfo hitInfo;
-			hitInfo.MonsterID = monster.second.get()->GetID();
+			hitInfo.MonsterID = monster.second->GetID();
 			hitInfo.SpawnID = monster.first;
 			hitInfo.Damage = 20;
 			hitMonsters.push_back(hitInfo);
+
+			if (expOpt.has_value())
+			{
+				int expGained = expOpt.value();
+				user->GetCharacter().AddExp(expGained);  // 경험치 누적
+
+				MainServer::Instance().SendExpGain(user, expGained);
+			}
 		}
 	}
 

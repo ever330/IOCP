@@ -1,6 +1,6 @@
 #include "User.h"
 
-User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_character({ 0.0f, 0.0f, 0.0f }), m_isConnected(false), m_lastInputFrame(0)
+User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_isConnected(false), m_lastInputFrame(0), m_isCharacterSet(false)
 {
 
 }
@@ -40,9 +40,20 @@ unsigned int User::GetCurrentMapID() const
 	return m_currentMapID;
 }
 
-Character& User::GetCharacter() 
+void User::SetCharacter(unsigned int id, std::string name, unsigned int level, unsigned long exp)
 {
-	return m_character;
+	m_character = std::make_unique<Character>(id, name, level, exp);
+	m_isCharacterSet = true;
+}
+
+Character& User::GetCharacter()
+{
+	return *m_character;
+}
+
+bool User::IsCharacterSet() const
+{
+	return m_isCharacterSet;
 }
 
 void User::SetConnected(bool isConnected)

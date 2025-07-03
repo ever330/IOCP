@@ -13,7 +13,7 @@ public:
 	~Monster();
 
 	void Update(const std::unordered_set<unsigned int> mapUsers);
-	void TakeDamage(Direction dir, int damage, int knockbackDistance);
+	std::optional<int> TakeDamage(Direction dir, int damage, int knockbackDistance);
 	void Respawn(Vector3 spawnPos);
 
 	bool IsDead() const;
@@ -30,8 +30,10 @@ private:
 	int m_maxHP;
 	int m_curHP;
 	Vector3 m_position;
+	bool m_isDead;
 	
 	const int m_speed = 5;
 	const int m_detectRange = 100;
+	const int m_expReward = 10;
 };
 

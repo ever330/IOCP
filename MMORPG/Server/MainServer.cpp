@@ -23,6 +23,7 @@ bool MainServer::StartServer()
 	{
 		Log("Redis 연결 실패");
 	}
+	LoadAllCharactersToRedis();
 
 	RegisterPacketHandlers();
 
@@ -74,6 +75,8 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 
 void MainServer::StopServer()
 {
+	PeriodSave();
+
 	m_isRunning = false;
 	for (int i = 0; i < PACKET_THREAD; ++i)
 	{
@@ -87,6 +90,7 @@ void MainServer::StopServer()
 	}
 
 	m_IOCP->Finalize();
+	RedisManager::Instance().Finalize();
 }
 
 void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
@@ -104,6 +108,7 @@ void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
 			{
 				m_mapManager.GetMap(user->GetCurrentMapID())->RemoveUser(user);
 			}
+			UserLevelSave(&userIt->second->GetCharacter());
 		}
 		m_users.erase(curUserID);
 	}
@@ -261,8 +266,8 @@ void MainServer::RegisterPacketHandlers()
 {
 	m_dispatcher.RegisterUserHandler(std::make_unique<UserPacketHandler>());
 	m_dispatcher.RegisterUserHandler(std::make_unique<ChatPacketHandler>(m_mapManager));
-	m_dispatcher.RegisterUserHandler(std::make_unique<MapPacketHandler>(m_mapManager));
 	m_dispatcher.RegisterAuthHandler(std::make_unique<AuthPacketHandler>());
+	m_dispatcher.RegisterMapHandler(std::make_unique<MapPacketHandler>(m_mapManager));
 }
 
 void MainServer::OutputServerMessages()
@@ -281,9 +286,41 @@ void MainServer::OutputServerMessages()
 	}
 }
 
+void MainServer::LoadAllCharactersToRedis()
+{
+	std::vector<CharacterData> allCharacters = m_DBManager->GetAllCharacters();
+
+	for (const auto& ch : allCharacters)
+	{
+		RedisManager::Instance().UpdateCharacterToRedis(ch.CharacterID, ch.Level, ch.Experience, ch.Name);
+	}
+	Log("모든 캐릭터 정보를 Redis에 로드했습니다.");
+}
+
 bool MainServer::IsAuthPacket(uint16_t packetID) const
 {
 	return packetID == C2SLogin || packetID == C2SSignUp || packetID == C2SCheckID;
+}
+
+void MainServer::PeriodSave()
+{
+	std::scoped_lock lock(m_mutex);
+	for (auto& it : m_users)
+	{
+		if (!it.second->IsCharacterSet())
+		{
+			continue;
+		}
+		if (it.second->GetCharacter().IsDirty())
+		{
+			m_DBManager->UpdateCharacterLevelAndExp(it.second->GetCharacter().GetID(),
+				it.second->GetCharacter().GetLevel(),
+				it.second->GetCharacter().GetExp());
+
+			it.second->GetCharacter().ClearDirty();
+		}
+	}
+	Log("유저 레벨, 경험치. DB저장");
 }
 
 void MainServer::Log(const std::string& message)
@@ -294,6 +331,11 @@ void MainServer::Log(const std::string& message)
 MapManager& MainServer::GetMapManager()
 {
 	return m_mapManager;
+}
+
+PacketDispatcher& MainServer::GetPacketDispatcher()
+{
+	return m_dispatcher;
 }
 
 void MainServer::Update()
@@ -308,9 +350,40 @@ void MainServer::Update()
 	// 맵 업데이트
 	m_mapManager.Update(deltaTime, tickCount);
 
+	// 100틱 (10초)마다 DB에 유저 레벨과 경험치 저장.
+	if (tickCount % 100 == 0)
+	{
+		PeriodSave();
+	}
+
 	lastTime = std::chrono::steady_clock::now();
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	tickCount++;
+}
+
+void MainServer::SendExpGain(std::shared_ptr<User> user, int expGained)
+{
+	S2CExpGainPacket expGain{};
+	expGain.ExpGained = expGained;
+	expGain.TotalExp = user->GetCharacter().GetExp();
+	expGain.Level = user->GetCharacter().GetLevel();
+
+	int packetSize = sizeof(PacketBase) + sizeof(S2CExpGainPacket);
+	std::shared_ptr<char[]> buffer(new char[packetSize]);
+
+	PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
+	newPac->PacID = S2CExpGain;
+	newPac->PacketSize = packetSize;
+
+	memcpy(newPac->Body, &expGain, sizeof(S2CExpGainPacket));
+
+	SendPacket(user->GetUserID(), newPac);
+}
+
+void MainServer::UserLevelSave(Character* character)
+{
+	m_DBManager->UpdateCharacterLevelAndExp(character->GetID(), character->GetLevel(), character->GetExp());
+	RedisManager::Instance().UpdateCharacterToRedis(character->GetID(), character->GetLevel(), character->GetExp(), character->GetName());
 }

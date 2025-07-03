@@ -6,6 +6,7 @@
 #include "MMORPG_Client.h"
 #include "MMORPG_ClientDlg.h"
 #include "CLoginDialog.h"
+#include "CCharacterSelectDialog.h"
 
 
 // 메모리 누수 테스트
@@ -93,6 +94,16 @@ BOOL CMMORPGClientApp::InitInstance()
 	if (loginDlg.DoModal() != IDOK)
 	{
 		AfxMessageBox(_T("로그인이 취소되었습니다."));
+		return FALSE;
+	}
+
+	CCharacterSelectDialog charSelectDlg;
+	charSelectDlg.SetNetwork(m_network);
+	charSelectDlg.SetUser(m_user);
+
+	if (charSelectDlg.DoModal() != IDOK)
+	{
+		AfxMessageBox(_T("캐릭터 선택이 취소되었습니다."));
 		return FALSE;
 	}
 

@@ -18,6 +18,10 @@ private:
 	void HandleSetName(std::shared_ptr<User> user, PacketBase* pac);
 	void HandlePlayerMove(std::shared_ptr<User> user, PacketBase* pac);
 	void HandlePlayerStop(std::shared_ptr<User> user, PacketBase* pac);
+	void HandleCheckName(std::shared_ptr<User> user, PacketBase* pac);
+	void HandleCreateCharacter(std::shared_ptr<User> user, PacketBase* pac);
+	void HandleSelectCharacter(std::shared_ptr<User> user, PacketBase* pac);
+	void HandleRanking(std::shared_ptr<User> user, PacketBase* pac);
 
     // 임시 유저 ID 생성용
 	unsigned int m_userID = 1;

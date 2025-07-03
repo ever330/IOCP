@@ -154,6 +154,7 @@
   <ItemGroup>
     <ClInclude Include="AuthPacketHandler.h" />
     <ClInclude Include="Character.h" />
+    <ClInclude Include="CharacterData.h" />
     <ClInclude Include="ChatPacketHandler.h" />
     <ClInclude Include="DBManager.h" />
     <ClInclude Include="Define.h" />

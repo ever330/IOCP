@@ -19,7 +19,10 @@ public:
 	void SetCurrentMapID(unsigned int mapID);
 	unsigned int GetCurrentMapID() const;
 
+	void SetCharacter(unsigned int id, std::string name, unsigned int level, unsigned long exp);
 	Character& GetCharacter();
+
+	bool IsCharacterSet() const;
 
 	void SetConnected(bool isConnected);
 	bool IsConnected() const;
@@ -31,7 +34,8 @@ private:
 	unsigned int m_userID;
 	std::string m_userName;
 	unsigned int m_currentMapID;
-	Character m_character;
+	std::unique_ptr<Character> m_character;
 	bool m_isConnected;
 	unsigned int m_lastInputFrame;
+	bool m_isCharacterSet = false;
 };

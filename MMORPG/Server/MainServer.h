@@ -55,7 +55,13 @@ public:
 
 	MapManager& GetMapManager();
 
+	PacketDispatcher& GetPacketDispatcher();
+
 	void Update();
+
+	void SendExpGain(std::shared_ptr<User> user, int expGained);
+
+	void UserLevelSave(Character* character);
 
 private:
 	void PacketWorker(int index);
@@ -65,8 +71,12 @@ private:
 	void RegisterPacketHandlers(); // 핸들러 등록 함수
 
 	void OutputServerMessages(); // 서버 메시지 출력 함수
+	void LoadAllCharactersToRedis();
 
 	bool IsAuthPacket(uint16_t packetID) const;
+
+	// 특정 주기마다 DB에 유저정보 저장
+	void PeriodSave();
 
 	std::unique_ptr<IOCP> m_IOCP;
 	std::unique_ptr<DBManager> m_DBManager;

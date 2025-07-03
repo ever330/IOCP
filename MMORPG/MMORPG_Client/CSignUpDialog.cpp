@@ -1,6 +1,4 @@
-#include "pch.h"
-#include "MMORPG_Client.h"
-#include "afxdialogex.h"
+#include "resource.h"
 #include "CLoginDialog.h"
 #include "CSignUpDialog.h"
 

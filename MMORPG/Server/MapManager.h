@@ -14,6 +14,8 @@ public:
 	std::shared_ptr<Map> GetMap(unsigned int mapId);
 
 private:
+	void LoadMaps();
+
 	std::mutex m_mutex;
 	std::unordered_map<unsigned int, std::shared_ptr<Map>> m_maps;
 };

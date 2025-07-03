@@ -183,8 +183,11 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CCharacterSelectDialog.h" />
     <ClInclude Include="CChatInputEdit.h" />
+    <ClInclude Include="CCreateCharacterDialog.h" />
     <ClInclude Include="CLoginDialog.h" />
+    <ClInclude Include="CRankingDialog.h" />
     <ClInclude Include="CSignUpDialog.h" />
     <ClInclude Include="Monster.h" />
     <ClInclude Include="OtherPlayer.h" />
@@ -197,6 +200,7 @@
     <ClInclude Include="Network.h" />
     <ClInclude Include="packet.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Portal.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Ringbuffer.h" />
     <ClInclude Include="targetver.h" />
@@ -205,9 +209,12 @@
     <ClInclude Include="Vector3.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CCharacterSelectDialog.cpp" />
     <ClCompile Include="CChatInputEdit.cpp" />
+    <ClCompile Include="CCreateCharacterDialog.cpp" />
     <ClCompile Include="CLoginDialog.cpp" />
     <ClCompile Include="CNicknameDialog.cpp" />
+    <ClCompile Include="CRankingDialog.cpp" />
     <ClCompile Include="CSignUpDialog.cpp" />
     <ClCompile Include="CTestView.cpp" />
     <ClCompile Include="MMORPG_Client.cpp" />
@@ -220,6 +227,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Portal.cpp" />
+    <ClCompile Include="User.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="MMORPGClient.rc" />

@@ -1,4 +1,5 @@
 #include "DBManager.h"
+#include "MainServer.h"
 
 DBManager::DBManager() 
 {
@@ -18,10 +19,13 @@ void DBManager::Initialize(const std::string& host, const std::string& user, con
         m_con->setSchema(schema);
 
         m_thread = std::thread(&DBManager::DBThreadLoop, this);
+
+		MainServer::Instance().Log("DBManager 초기화 완료!");
     }
     catch (sql::SQLException& e) 
     {
-        std::cerr << "[DBManager::Init] DB 연결 실패: " << e.what() << std::endl;
+		std::string errorMsg = "DB 연결 실패: " + std::string(e.what());
+        MainServer::Instance().Log(errorMsg);
     }
 }
 
@@ -32,6 +36,44 @@ void DBManager::RequestQuery(const std::string& sql, std::function<void(bool, sq
         m_requestQueue.push({ sql, callback });
     }
     m_cond.notify_one();
+}
+
+void DBManager::UpdateCharacterLevelAndExp(unsigned int characterID, unsigned int level, unsigned long exp)
+{
+    std::string query = "UPDATE Characters SET Level = ?, Exp = ? WHERE CharID = ?";
+    std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
+    stmt->setInt(1, level);
+    stmt->setUInt(2, exp);
+    stmt->setInt(3, characterID);
+    stmt->execute();
+}
+
+std::vector<CharacterData> DBManager::GetAllCharacters()
+{
+    std::vector<CharacterData> result;
+
+    try
+    {
+        std::string query = "SELECT CharID, Level, Exp, Name FROM Characters";
+        std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
+        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+        while (res->next())
+        {
+            CharacterData ch;
+            ch.CharacterID = res->getInt("CharID");
+            ch.Level = res->getInt("Level");
+            ch.Experience = res->getUInt64("Exp");
+            ch.Name = res->getString("Name");
+            result.push_back(std::move(ch));
+        }
+    }
+    catch (sql::SQLException& e)
+    {
+        std::cerr << "GetAllCharacters 오류: " << e.what() << std::endl;
+    }
+
+    return result;
 }
 
 void DBManager::DBThreadLoop() 
