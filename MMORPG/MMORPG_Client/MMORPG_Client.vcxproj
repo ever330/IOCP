@@ -221,6 +221,7 @@
     <ClCompile Include="MMORPG_ClientDlg.cpp" />
     <ClCompile Include="Monster.cpp" />
     <ClCompile Include="Network.cpp" />
+    <ClCompile Include="OtherPlayer.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

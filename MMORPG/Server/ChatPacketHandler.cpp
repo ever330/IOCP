@@ -20,7 +20,7 @@ void ChatPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
     memcpy(&chatPacket, pac->Body, pac->PacketSize - sizeof(PacketBase));
 
     S2CPlayerChatPacket response;
-    response.UserID = user->GetUserID();
+    response.CharacterID = user->GetCharacter().GetID();
     memcpy(response.Name, user->GetUserName().c_str(), sizeof(response.Name));
     memcpy(response.ChatMsg, chatPacket.ChatMsg, sizeof(response.ChatMsg));
 

@@ -1,4 +1,5 @@
 #include "RedisManager.h"
+#include "MainServer.h"
 
 RedisManager& RedisManager::Instance()
 {
@@ -11,7 +12,7 @@ bool RedisManager::Connect(const std::string& ip, int port, const std::string& p
 	m_context = redisConnect(ip.c_str(), port);
 	if (!m_context || m_context->err)
 	{
-		std::cerr << "Redis 연결 실패: " << (m_context ? m_context->errstr : "NULL") << std::endl;
+		MainServer::Instance().Log("Redis 연결 실패: " + std::string(m_context ? m_context->errstr : "NULL"));
 		return false;
 	}
 
@@ -19,7 +20,7 @@ bool RedisManager::Connect(const std::string& ip, int port, const std::string& p
 	redisReply* reply = (redisReply*)redisCommand(m_context, "AUTH %s", password.c_str());
 	if (!reply || m_context->err)
 	{
-		std::cerr << "Redis 인증 실패: " << m_context->errstr << std::endl;
+		MainServer::Instance().Log("Redis 인증 실패: " + std::string(m_context->errstr));
 		redisFree(m_context);
 		m_context = nullptr;
 		return false;

@@ -24,7 +24,7 @@ public:
     using PlayerEnterHandler = std::function<void(const uint16_t, const char*, const float, const float)>;
     using PlayerLeaveHandler = std::function<void(const uint16_t)>;
     using PlayerInfoHandler = std::function<void(const std::vector<S2CPlayerStateInfo>&)>;
-	using PlayerMoveHandler = std::function<void(const uint16_t, Direction)>;
+	using OtherPlayerPosSyncHandler = std::function<void(const S2COtherPlayerPosSyncPacket*)>;
 	using PlayerPosSyncHandler = std::function<void(const float, const float, const float, const uint32_t)>;
 	using MonsterHitInfoHandler = std::function<void(const std::vector<S2CMonsterHitInfo>&)>;
 	using MonsterRespawnHandler = std::function<void(const std::vector<S2CMonsterRespawnInfo>&)>;
@@ -51,6 +51,7 @@ public:
     void PlayerMove(Direction dir, uint32_t frameID);
 	void PlayerStop(uint32_t frameID);
 	void PlayerAttack(Direction dir);
+	void PlayerPosSync(float x, float y, float z, uint32_t frameID);
 
 	void SetCheckIDResultCallback(CheckIDResultHandler handler);
 	void SetSignUpResultCallback(SignUpResultHandler handler);
@@ -65,7 +66,7 @@ public:
     void SetPlayerEnterCallback(PlayerEnterHandler handler);
     void SetPlayerLeaveCallback(PlayerLeaveHandler handler);
 	void SetPlayerInfoCallback(PlayerInfoHandler handler);
-	void SetPlayerMoveCallback(PlayerMoveHandler handler);
+	void SetOtherPlayerPosSyncCallback(OtherPlayerPosSyncHandler handler);
 	void SetPlayerPosSyncCallback(PlayerPosSyncHandler handler);
 	void SetMonsterHitInfoCallback(MonsterHitInfoHandler handler);
     void SetMonsterRespawnCallback(MonsterRespawnHandler handler);
@@ -96,7 +97,7 @@ private:
     PlayerEnterHandler m_playerEnterHandler;
     PlayerLeaveHandler m_playerLeaveHandler;
 	PlayerInfoHandler m_playerInfoHandler;
-	PlayerMoveHandler m_playerMoveHandler;
+	OtherPlayerPosSyncHandler m_otherPlayerPosSyncHandler;
 	PlayerPosSyncHandler m_playerPosSyncHandler;
 	MonsterHitInfoHandler m_monsterHitInfoHandler;
     MonsterRespawnHandler m_monsterRespawnHandler;

@@ -264,6 +264,26 @@ void Network::PlayerAttack(Direction dir)
 	delete[] buffer;
 }
 
+void Network::PlayerPosSync(float x, float y, float z, uint32_t frameID)
+{
+	C2SPlayerPosSyncPacket posSync{};
+	posSync.PosX = x;
+	posSync.PosY = y;
+	posSync.PosZ = z;
+	posSync.FrameID = frameID;
+
+	PacketBase pac;
+	pac.PacID = C2SPlayerPosSync;
+	pac.PacketSize = sizeof(PacketBase) + sizeof(posSync);
+
+	char* buffer = new char[pac.PacketSize];
+	memcpy(buffer, &pac, sizeof(pac));
+	memcpy(buffer + sizeof(pac), &posSync, sizeof(posSync));
+
+	send(m_socket, buffer, pac.PacketSize, 0);
+	delete[] buffer;
+}
+
 void Network::RecvLoop()
 {
 	char tempBuf[1024];
@@ -395,14 +415,14 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 		S2CPlayerEnterPacket playerEnter;
 		memcpy(&playerEnter, body, sizeof(playerEnter));
 		if (m_playerEnterHandler)
-			m_playerEnterHandler(playerEnter.UserID, playerEnter.Name, playerEnter.SpawnPosX, playerEnter.SpawnPosY);
+			m_playerEnterHandler(playerEnter.CharacterID, playerEnter.Name, playerEnter.SpawnPosX, playerEnter.SpawnPosY);
 	}
 	else if (pac->PacID == S2CPlayerLeave)
 	{
 		S2CPlayerLeavePacket playerLeave;
 		memcpy(&playerLeave, body, sizeof(playerLeave));
 		if (m_playerLeaveHandler)
-			m_playerLeaveHandler(playerLeave.UserID);
+			m_playerLeaveHandler(playerLeave.CharacterID);
 	}
 	else if (pac->PacID == S2CPlayerState)
 	{
@@ -422,11 +442,11 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 		if (m_playerInfoHandler)
 			m_playerInfoHandler(users);
 	}
-	else if (pac->PacID == S2CPlayerMove)
+	else if (pac->PacID == S2COtherPlayerPosSync)
 	{
-		const S2CPlayerMovePacket* moveInfo = reinterpret_cast<const S2CPlayerMovePacket*>(body);
-		if (m_playerMoveHandler)
-			m_playerMoveHandler(moveInfo->UserID, (Direction)moveInfo->MoveDirection);
+		const S2COtherPlayerPosSyncPacket* syncInfo = reinterpret_cast<const S2COtherPlayerPosSyncPacket*>(body);
+		if (m_otherPlayerPosSyncHandler)
+			m_otherPlayerPosSyncHandler(syncInfo);
 	}
 	else if (pac->PacID == S2CPlayerPosSync)
 	{
@@ -485,13 +505,23 @@ void Network::HandlePacket(PacketBase* pac, const char* body)
 	{
 		const S2CPlayerAttackPacket* attackInfo = reinterpret_cast<const S2CPlayerAttackPacket*>(body);
 		if (m_playerAttackHandler)
-			m_playerAttackHandler(attackInfo->UserID, (Direction)attackInfo->AttackDirection);
+			m_playerAttackHandler(attackInfo->CharacterID, (Direction)attackInfo->AttackDirection);
 	}
 	else if (pac->PacID == S2CExpGain)
 	{
 		const S2CExpGainPacket* expInfo = reinterpret_cast<const S2CExpGainPacket*>(body);
 		if (m_expGainHandler)
 			m_expGainHandler(expInfo->ExpGained, expInfo->TotalExp, expInfo->Level);
+	}
+	else if (pac->PacID == S2CHeartBeat)
+	{
+		PacketBase pac;
+		pac.PacID = C2SHeartBeat;
+		pac.PacketSize = sizeof(PacketBase);
+		char* buffer = new char[pac.PacketSize];
+		memcpy(buffer, &pac, sizeof(pac));
+		send(m_socket, buffer, pac.PacketSize, 0);
+		delete[] buffer;
 	}
 	else
 	{
@@ -565,9 +595,9 @@ void Network::SetPlayerInfoCallback(PlayerInfoHandler handler)
 	m_playerInfoHandler = handler;
 }
 
-void Network::SetPlayerMoveCallback(PlayerMoveHandler handler)
+void Network::SetOtherPlayerPosSyncCallback(OtherPlayerPosSyncHandler handler)
 {
-	m_playerMoveHandler = handler;
+	m_otherPlayerPosSyncHandler = handler;
 }
 
 void Network::SetPlayerPosSyncCallback(PlayerPosSyncHandler handler)

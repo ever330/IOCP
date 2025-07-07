@@ -44,8 +44,10 @@ enum PacketID : uint16_t
 
 	// 플레이어 관련
 	C2SPlayerMove = 500,
-	S2CPlayerMove,
+	S2COtherPlayerPosSync,
 	C2SPlayerStop,
+	S2CPlayerStop,
+	C2SPlayerPosSync,
 	S2CPlayerPosSync,
 	C2SPlayerAttack,
 	S2CPlayerAttack,
@@ -60,19 +62,6 @@ struct PacketBase
 	uint16_t PacketSize;
 	PacketID PacID;
 	char Body[];
-};
-
-struct C2SConnectPacket
-{
-};
-
-struct S2CConnectAckPacket
-{
-	uint8_t Result; // 0: 성공, 1: 실패
-};
-
-struct C2SDisconnectPacket
-{
 };
 
 struct C2SCheckIDPacket
@@ -232,7 +221,7 @@ struct C2SChangeMapByPortalPacket
 
 struct S2CPlayerEnterPacket
 {
-	uint16_t UserID;
+	uint16_t CharacterID;
 	char Name[NAME_SIZE];
 	float SpawnPosX;
 	float SpawnPosY;
@@ -241,7 +230,7 @@ struct S2CPlayerEnterPacket
 
 struct S2CPlayerLeavePacket
 {
-	uint16_t UserID;
+	uint16_t CharacterID;
 	char Name[NAME_SIZE];
 };
 
@@ -252,7 +241,7 @@ struct S2CPlayerStatePacket
 
 struct S2CPlayerStateInfo
 {
-	uint16_t UserID;
+	uint16_t CharacterID;
 	char Name[NAME_SIZE];
 
 	float PosX;
@@ -304,14 +293,30 @@ struct C2SPlayerMovePacket
 	uint32_t FrameID;
 };
 
-struct S2CPlayerMovePacket
+struct S2COtherPlayerPosSyncPacket
 {
-	uint16_t UserID;
-	uint8_t MoveDirection;
+	uint16_t CharacterID;
+	uint8_t MoveDirection;        // 이동 방향 (애니메이션용)
+	float PosX;
+	float PosY;
+	float PosZ;
 };
 
 struct C2SPlayerStopPacket
 {
+	uint32_t FrameID;
+};
+
+struct S2CPlayerStopPacket
+{
+	uint16_t CharacterID;
+};
+
+struct C2SPlayerPosSyncPacket
+{
+	float PosX;
+	float PosY;
+	float PosZ;
 	uint32_t FrameID;
 };
 
@@ -330,7 +335,7 @@ struct C2SPlayerAttackPacket
 
 struct S2CPlayerAttackPacket
 {
-	uint16_t UserID;
+	uint16_t CharacterID;
 	uint8_t AttackDirection;
 };
 
@@ -356,7 +361,7 @@ struct C2SPlayerChatPacket
 
 struct S2CPlayerChatPacket
 {
-	uint16_t UserID;
+	uint16_t CharacterID;
 	char Name[NAME_SIZE];
 	char ChatMsg[MSG_SIZE];
 };

@@ -63,6 +63,18 @@ void MainServer::PushData(unsigned int sessionID, char* data)
 	// 디버깅 출력
 	Log("PushData: 세션 ID " + std::to_string(sessionID) + ", 패킷 크기: " + std::to_string(pac->PacketSize) + ", 타입: " + std::to_string(pac->PacID));
 
+	if (pac->PacID == PacketID::C2SHeartBeat)
+	{
+		m_IOCP->UpdateHeartBeatTime(sessionID);
+		return;
+	}
+	if (pac->PacID > S2CExpGain)
+	{
+		Log("PushData: 처리할 수 없는 패킷 ID: " + std::to_string(pac->PacID) + " (세션 ID: " + std::to_string(sessionID) + ")");
+		delete[] reinterpret_cast<char*>(pac);
+		return;
+	}
+
 	unsigned int curUserID = RedisManager::Instance().GetUserIDBySessionID(sessionID);
 
 	int index = sessionID % PACKET_THREAD;
@@ -320,7 +332,6 @@ void MainServer::PeriodSave()
 			it.second->GetCharacter().ClearDirty();
 		}
 	}
-	Log("유저 레벨, 경험치. DB저장");
 }
 
 void MainServer::Log(const std::string& message)

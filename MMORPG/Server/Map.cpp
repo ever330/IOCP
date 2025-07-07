@@ -4,7 +4,7 @@
 #include "MainServer.h"
 
 Map::Map(int id)
-	: m_id(id), m_responseCount(0)
+	: m_id(id)
 {
 }
 
@@ -57,13 +57,10 @@ void Map::Update(float deltaTime, int tickCount)
 
 	MonsterStateUpdate();
 
-	if (m_responseCount >= SPAWN_COUNT)
+	if (tickCount % SPAWN_COUNT == 0)
 	{
 		SpawnMonster();
-		m_responseCount = 0;
 	}
-
-	m_responseCount++;
 }
 
 void Map::AddPortal(unsigned int targetMapID, Vector3 position, Vector3 spawnPosition)
@@ -105,7 +102,7 @@ void Map::AddUser(std::shared_ptr<User> user)
 	if (m_users.insert(user->GetUserID()).second)
 	{
 		S2CPlayerEnterPacket enterPacket;
-		enterPacket.UserID = user->GetUserID();
+		enterPacket.CharacterID = user->GetCharacter().GetID();
 		memcpy(enterPacket.Name, user->GetUserName().c_str(), sizeof(enterPacket.Name));
 		enterPacket.SpawnPosX = m_userSpawnPos.x;
 		enterPacket.SpawnPosY = m_userSpawnPos.y;
@@ -135,7 +132,7 @@ void Map::RemoveUser(std::shared_ptr<User> user)
 		m_users.erase(it);
 
 		S2CPlayerLeavePacket leavePacket;
-		leavePacket.UserID = userID;
+		leavePacket.CharacterID = user->GetCharacter().GetID();
 		memcpy(leavePacket.Name, user->GetUserName().c_str(), sizeof(leavePacket.Name));
 
 		PacketBase* packet = (PacketBase*)new char[sizeof(PacketBase) + sizeof(S2CPlayerLeavePacket)];
@@ -175,7 +172,7 @@ void Map::PlayerAttack(std::shared_ptr<User> user, C2SPlayerAttackPacket pac)
 	ackPac->PacketSize = ackPacSize;
 	ackPac->PacID = S2CPlayerAttack;
 	S2CPlayerAttackPacket* attackAck = reinterpret_cast<S2CPlayerAttackPacket*>(ackPac->Body);
-	attackAck->UserID = user.get()->GetUserID();
+	attackAck->CharacterID = user->GetCharacter().GetID();
 	attackAck->AttackDirection = pac.AttackDirection;
 
 	MainServer::Instance().BroadCast(m_users, ackPac);
@@ -344,7 +341,7 @@ void Map::PlayerStateUpdate()
 				continue;
 
 			S2CPlayerStateInfo info{};
-			info.UserID = userID;
+			info.CharacterID = user->GetCharacter().GetID();
 			strncpy_s(info.Name, sizeof(info.Name), user->GetUserName().c_str(), _TRUNCATE);
 			auto pos = user->GetCharacter().GetPosition();
 			info.PosX = pos.x;
@@ -353,6 +350,8 @@ void Map::PlayerStateUpdate()
 			info.Direction = user->GetCharacter().GetDirection();
 
 			playerStates.push_back(info);
+			std::string log = user->GetUserName() + " (" + std::to_string(info.PosX) + ", " + std::to_string(info.PosY) + ")";
+			MainServer::Instance().Log(log);
 		}
 	}
 

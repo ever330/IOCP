@@ -23,8 +23,8 @@ public:
 
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 
-    void SetNetwork(Network* network) { m_network = network; }
-    void SetUser(User* user) { m_user = user; }
+    void SetNetwork(Network* network);
+    void SetUser(User* user);
 
     afx_msg void OnTimer(UINT_PTR nIDEvent);
     afx_msg void OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
@@ -36,7 +36,7 @@ public:
     afx_msg LRESULT OnPlayerEnter(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnPlayerLeave(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnUpdatePlayerState(WPARAM wParam, LPARAM lParam);
-    afx_msg LRESULT OnOtherPlayerMove(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnOtherPlayerPosSync(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnPlayerPosSync(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnUpdateMonsterHit(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnRespawnMonster(WPARAM wParam, LPARAM lParam);
@@ -68,6 +68,7 @@ private:
     Direction m_attackDirection;   // 공격 방향
     bool m_isMoving; // 플레이어가 이동 중인지 여부
     std::chrono::steady_clock::time_point m_lastUpdateTime; // 마지막 업데이트 시간
+    float m_syncTimer;
 
     std::unordered_map<uint16_t, AttackInfo> m_otherAttacks; // 다른 플레이어의 공격 정보
 

@@ -20,7 +20,7 @@ void DBManager::Initialize(const std::string& host, const std::string& user, con
 
         m_thread = std::thread(&DBManager::DBThreadLoop, this);
 
-		MainServer::Instance().Log("DBManager 초기화 완료!");
+		MainServer::Instance().Log("DBManager 연결 완료");
     }
     catch (sql::SQLException& e) 
     {

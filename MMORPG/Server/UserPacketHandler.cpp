@@ -9,7 +9,7 @@ UserPacketHandler::UserPacketHandler()
 
 bool UserPacketHandler::CanHandle(uint16_t packetID) const
 {
-	return packetID == C2SSetName || packetID == C2SPlayerMove || packetID == C2SPlayerStop || packetID == C2SCheckCharacterName || packetID == C2SCreateCharacter || packetID == C2SSelectCharacter || packetID == C2SRanking;
+	return packetID == C2SSetName || packetID == C2SPlayerMove || packetID == C2SPlayerStop || packetID == C2SCheckCharacterName || packetID == C2SCreateCharacter || packetID == C2SSelectCharacter || packetID == C2SRanking || packetID == C2SPlayerPosSync;
 }
 
 void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
@@ -41,6 +41,10 @@ void UserPacketHandler::Handle(std::shared_ptr<User> user, PacketBase* pac)
 	else if (pac->PacID == C2SRanking)
 	{
 		HandleRanking(user, pac);
+	}
+	else if (pac->PacID == C2SPlayerPosSync)
+	{
+		HandlePlayerPosSync(user, pac);
 	}
 }
 
@@ -74,39 +78,27 @@ void UserPacketHandler::HandlePlayerMove(std::shared_ptr<User> user, PacketBase*
 	user->GetCharacter().SetMoving(true);
 	user->SetLastInputFrame(move.FrameID); // 클라가 보낸 frameID 저장
 
-	S2CPlayerMovePacket movePacket{};
-	movePacket.UserID = user->GetUserID();
-	movePacket.MoveDirection = move.MoveDirection;
+	S2COtherPlayerPosSyncPacket otherPlayerSync{};
+	otherPlayerSync.CharacterID = user->GetCharacter().GetID();
+	otherPlayerSync.MoveDirection = move.MoveDirection;
 
-	int packetSize = sizeof(PacketBase) + sizeof(movePacket);
+	Vector3 pos = user->GetCharacter().GetPosition();
+	otherPlayerSync.PosX = pos.x;
+	otherPlayerSync.PosY = pos.y;
+	otherPlayerSync.PosZ = pos.z;
+
+	int packetSize = sizeof(PacketBase) + sizeof(otherPlayerSync);
 	std::shared_ptr<char[]> buffer(new char[packetSize]);
 	PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
-	newPac->PacID = S2CPlayerMove;
+
+	newPac->PacID = S2COtherPlayerPosSync;
 	newPac->PacketSize = packetSize;
-	memcpy(newPac->Body, &movePacket, sizeof(movePacket));
+	memcpy(newPac->Body, &otherPlayerSync, sizeof(otherPlayerSync));
 
-	// 같은 맵 유저들에게 방향 브로드캐스트
+	// 같은 맵의 다른 유저에게 전송
 	auto map = MainServer::Instance().GetMapManager().GetMap(user->GetCurrentMapID());
-
 	if (map)
 		MainServer::Instance().BroadCast(map->GetUsers(), newPac);
-
-
-	S2CPlayerPosSyncPacket sync{};
-	Vector3 pos = user->GetCharacter().GetPosition();
-	sync.PosX = pos.x;
-	sync.PosY = pos.y;
-	sync.PosZ = pos.z;
-	sync.AckFrameID = move.FrameID; // 마지막으로 처리한 클라 입력
-
-	int packetSize2 = sizeof(PacketBase) + sizeof(sync);
-	std::shared_ptr<char[]> buffer2(new char[packetSize2]);
-	PacketBase* response = reinterpret_cast<PacketBase*>(buffer2.get());
-	response->PacID = S2CPlayerPosSync;
-	response->PacketSize = packetSize2;
-	memcpy(response->Body, &sync, sizeof(sync));
-
-	MainServer::Instance().SendPacket(user->GetUserID(), response); // 유저에게 직접 전송
 }
 
 void UserPacketHandler::HandlePlayerStop(std::shared_ptr<User> user, PacketBase* pac)
@@ -120,6 +112,10 @@ void UserPacketHandler::HandlePlayerStop(std::shared_ptr<User> user, PacketBase*
 	// 플레이어가 멈췄을 때 처리 (예: 이동 중지 플래그 설정)
 	user->GetCharacter().SetMoving(false);
 	user->SetLastInputFrame(stop.FrameID); // 클라가 보낸 frameID 저장
+
+	S2CPlayerStopPacket stopPacket{};
+	stopPacket.CharacterID = user->GetCharacter().GetID();
+
 }
 
 void UserPacketHandler::HandleCheckName(std::shared_ptr<User> user, PacketBase* pac)
@@ -317,4 +313,25 @@ void UserPacketHandler::HandleRanking(std::shared_ptr<User> user, PacketBase* pa
 	memcpy(res->Rankers, rankers.data(), sizeof(S2CRankingInfo) * count);
 
 	MainServer::Instance().SendPacket(user->GetUserID(), base);
+}
+
+void UserPacketHandler::HandlePlayerPosSync(std::shared_ptr<User> user, PacketBase* pac)
+{
+	C2SPlayerPosSyncPacket sync{};
+	memcpy(&sync, pac->Body, sizeof(sync));
+
+	auto& character = user->GetCharacter();
+	Vector3 serverPos = character.GetPosition();
+	Vector3 clientPos(sync.PosX, sync.PosY, sync.PosZ);
+
+	float dist = serverPos.DistanceTo(clientPos);
+	constexpr float ALLOWED_POSITION_ERROR = 10.0f;
+
+	if (dist > ALLOWED_POSITION_ERROR)
+	{
+		// 서버 위치를 클라이언트 위치로 보정, 추후 해당 위치가 문제 없는지 확인 후 적용하는 과정 필요
+		character.SetPosition(clientPos);
+	}
+
+	// 위에서 클라이언트가 보내온 위치가 문제 있을 경우, S2CPlayerPosSync 패킷을 보내 클라이언트 위치를 보정할 수 있음
 }

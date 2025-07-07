@@ -50,8 +50,6 @@ private:
 
 	std::unordered_map<unsigned int, Portal> m_portals;
 
-	int m_responseCount;
-
 	std::mutex m_mutex;
 
 	const int m_monsterSpawnCount = 10;

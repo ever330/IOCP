@@ -22,6 +22,7 @@ public:
 	void SetUser(User* user) { m_user = user; }
 	void ShowRankingDialog(uint16_t myRank, const std::vector<S2CRankingInfo>& rankings);
 	void OnRankingDialogClosed();
+	void AddChatMessage(const CString& message);
 
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
@@ -55,7 +56,6 @@ protected:
 
 	bool m_rankingRequested = false;
 
-	void AddChatMessage(const CString& message);
 	afx_msg void OnSendButtonClicked(); // 채팅 전송 버튼
 	afx_msg void OnMoveButtonClicked(); // 맵 이동 버튼
 	afx_msg void OnBnClickedRankingButton();

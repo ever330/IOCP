@@ -396,19 +396,18 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network->SetPlayerEnterCallback([this](uint16_t userID, const char* name, float x, float y) {
+	m_network->SetPlayerEnterCallback([this](uint16_t characterID, const char* name, float x, float y) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
-			Vector3 position{ x, y, 0.0f };
-			auto* pPlayer = new OtherPlayer{ userID, CString(name), position };
+			auto* pPlayer = new OtherPlayer(characterID, CString(name), Vector3(x, y, 0.0f));
 			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_ENTER, 0, reinterpret_cast<LPARAM>(pPlayer));
 		}
 		});
 
-	m_network->SetPlayerLeaveCallback([this](uint16_t userID) {
+	m_network->SetPlayerLeaveCallback([this](uint16_t characterID) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
-			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_LEAVE, static_cast<WPARAM>(userID), 0);
+			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_LEAVE, static_cast<WPARAM>(characterID), 0);
 		}
 		});
 
@@ -420,10 +419,10 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network->SetPlayerMoveCallback([this](uint16_t userID, Direction direction) {
+	m_network->SetOtherPlayerPosSyncCallback([this](const S2COtherPlayerPosSyncPacket* sync) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
-			::SendMessage(m_testView->GetSafeHwnd(), WM_OTHER_PLAYER_MOVE, static_cast<WPARAM>(userID), static_cast<LPARAM>(direction));
+			::SendMessage(m_testView->GetSafeHwnd(), WM_OTHER_PLAYER_POS_SYNC, 0, (LPARAM)sync);
 		}
 		});
 
@@ -451,10 +450,10 @@ void CMMORPGClientDlg::SetCallback()
 		}
 		});
 
-	m_network->SetPlayerAttackCallback([this](uint16_t userID, Direction dir) {
+	m_network->SetPlayerAttackCallback([this](uint16_t characterID, Direction dir) {
 		if (m_testView && ::IsWindow(m_testView->GetSafeHwnd()))
 		{
-			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_ATTACK, static_cast<WPARAM>(userID), static_cast<LPARAM>(dir));
+			::SendMessage(m_testView->GetSafeHwnd(), WM_PLAYER_ATTACK, static_cast<WPARAM>(characterID), static_cast<LPARAM>(dir));
 		}
 		});
 
@@ -484,12 +483,6 @@ void CMMORPGClientDlg::SetCallback()
 
 void CMMORPGClientDlg::OnClose()
 {
-	m_network->SetMessageCallback(nullptr);
-	m_network->SetMapChangeCallback(nullptr);
-	m_network->SetMonsterInfoCallback(nullptr);
-	m_network->SetPlayerEnterCallback(nullptr);
-	m_network->SetPlayerLeaveCallback(nullptr);
-
 	CDialogEx::OnClose();
 }
 
@@ -532,6 +525,6 @@ LRESULT CMMORPGClientDlg::OnShowRanking(WPARAM wParam, LPARAM lParam)
 	m_rankingRequested = false;
 	ShowRankingDialog(myRanking, *rankings);
 
-	delete rankings; // new 했던 것 반드시 해제
+	delete rankings;
 	return 0;
 }

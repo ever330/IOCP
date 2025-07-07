@@ -10,7 +10,7 @@ BEGIN_MESSAGE_MAP(CTestView, CWnd)
 	ON_MESSAGE(WM_PLAYER_ENTER, &CTestView::OnPlayerEnter)
 	ON_MESSAGE(WM_PLAYER_LEAVE, &CTestView::OnPlayerLeave)
 	ON_MESSAGE(WM_UPDATE_PLAYER_STATE, &CTestView::OnUpdatePlayerState)
-	ON_MESSAGE(WM_OTHER_PLAYER_MOVE, &CTestView::OnOtherPlayerMove)
+	ON_MESSAGE(WM_OTHER_PLAYER_POS_SYNC, &CTestView::OnOtherPlayerPosSync)
 	ON_MESSAGE(WM_PLAYER_POS_SYNC, &CTestView::OnPlayerPosSync)
 	ON_MESSAGE(WM_UPDATE_MONSTER_HIT, &CTestView::OnUpdateMonsterHit)
 	ON_MESSAGE(WM_MONSTER_RESPAWN, &CTestView::OnRespawnMonster)
@@ -34,6 +34,7 @@ CTestView::CTestView()
 	m_playerDirection = Direction::Up;
 	m_user = nullptr;
 	m_currentFrameID = 0;
+	m_syncTimer = 0.0f;
 }
 
 CTestView::~CTestView()
@@ -69,6 +70,15 @@ void CTestView::Initialize()
 	m_lastUpdateTime = std::chrono::steady_clock::now();
 }
 
+void CTestView::SetNetwork(Network* network) 
+{
+	m_network = network;
+}
+
+void CTestView::SetUser(User* user) 
+{
+	m_user = user;
+}
 
 void CTestView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
@@ -191,21 +201,7 @@ void CTestView::DrawScene(CDC* pDC)
 	// 다른 플레이어들
 	for (const auto& player : m_otherPlayers)
 	{
-		int x = static_cast<int>(player.second->position.x);
-		int y = static_cast<int>(player.second->position.y);
-
-		// 글자 크기 측정
-		CString name = player.second->name;
-		CSize textSize = pDC->GetTextExtent(name);
-
-		// 배경 사각형 출력
-		CRect bgRect(x - 10, y - 25, x - 10 + textSize.cx, y - 25 + textSize.cy);
-		pDC->FillSolidRect(bgRect, RGB(255, 255, 255));
-
-		// 텍스트는 투명 배경으로 출력
-		pDC->SetBkMode(TRANSPARENT);
-		pDC->TextOut(x - 10, y - 25, name);
-		pDC->FillSolidRect(x - 10, y - 10, 20, 20, RGB(0, 200, 0));
+		player.second->Render(pDC);
 	}
 
 	// 내 플레이어
@@ -323,6 +319,10 @@ void CTestView::UpdatePlayer(float deltaTime)
 
 void CTestView::UpdateOtherPlayers(float deltaTime)
 {
+	for (auto& player : m_otherPlayers)
+	{
+		player.second->Update(deltaTime);
+	}
 }
 
 void CTestView::ClampPosition(CPoint& pos)
@@ -344,7 +344,17 @@ void CTestView::OnTimer(UINT_PTR nIDEvent)
 		auto now = std::chrono::steady_clock::now();
 		float deltaTime = std::chrono::duration<float>(now - m_lastUpdateTime).count();
 		UpdatePlayer(deltaTime);
+		UpdateOtherPlayers(deltaTime);
 		m_lastUpdateTime = now;
+
+		m_syncTimer += deltaTime;
+
+		if (m_syncTimer >= 0.2f)
+		{
+			m_network->PlayerPosSync(m_playerPos.x, m_playerPos.y, 0.0f, m_currentFrameID);
+			m_syncTimer = 0.0f;
+		}
+
 		Invalidate(FALSE);
 	}
 	CWnd::OnTimer(nIDEvent);
@@ -413,9 +423,9 @@ LRESULT CTestView::OnPlayerEnter(WPARAM wParam, LPARAM lParam)
 	auto rawPtr = reinterpret_cast<OtherPlayer*>(lParam);
 	std::unique_ptr<OtherPlayer> otherPlayer(rawPtr);
 
-	if (otherPlayer && m_user->GetUserId() != otherPlayer->userID)
+	if (otherPlayer && m_user->GetActiveCharacter().ID != otherPlayer->GetID())
 	{
-		m_otherPlayers[otherPlayer->userID] = std::move(otherPlayer);
+		m_otherPlayers[otherPlayer->GetID()] = std::move(otherPlayer);
 		Invalidate(false);
 	}
 
@@ -424,9 +434,9 @@ LRESULT CTestView::OnPlayerEnter(WPARAM wParam, LPARAM lParam)
 
 LRESULT CTestView::OnPlayerLeave(WPARAM wParam, LPARAM lParam)
 {
-	uint16_t userID = static_cast<uint16_t>(wParam);
+	uint16_t characterID = static_cast<uint16_t>(wParam);
 
-	m_otherPlayers.erase(userID);
+	m_otherPlayers.erase(characterID);
 
 	Invalidate(false);
 	return 0;
@@ -438,21 +448,24 @@ LRESULT CTestView::OnUpdatePlayerState(WPARAM wParam, LPARAM lParam)
 
 	if (pInfo)
 	{
-		m_otherPlayers.clear();
-
 		for (const auto& info : *pInfo)
 		{
-			auto player = std::make_unique<OtherPlayer>();
-			player->userID = info.UserID;
-			CA2W nameConverter(info.Name);
-			player->name = nameConverter;
-
-			player->position.x = info.PosX;
-			player->position.y = info.PosY;
-
-			if (player->userID != m_user->GetUserId())
+			auto player = m_otherPlayers.find(info.CharacterID);
+			if (player != m_otherPlayers.end())
 			{
-				m_otherPlayers[player->userID] = std::move(player);
+				// 이미 있는 플레이어의 상태 업데이트
+				player->second->SetTargetPosition(info.PosX, info.PosY);
+				player->second->SetDirection(static_cast<Direction>(info.Direction));
+				continue;
+			}
+			else
+			{
+				// 새로운 플레이어 생성
+				if (info.CharacterID == m_user->GetActiveCharacter().ID)
+					continue; // 자신의 캐릭터는 스킵
+				auto newPlayer = std::make_unique<OtherPlayer>(info.CharacterID, CString(info.Name), Vector3(info.PosX, info.PosY, 0.0f));
+				newPlayer->SetDirection(static_cast<Direction>(info.Direction));
+				m_otherPlayers[info.CharacterID] = std::move(newPlayer);
 			}
 		}
 		delete pInfo;
@@ -461,83 +474,66 @@ LRESULT CTestView::OnUpdatePlayerState(WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-LRESULT CTestView::OnOtherPlayerMove(WPARAM wParam, LPARAM lParam)
+LRESULT CTestView::OnOtherPlayerPosSync(WPARAM wParam, LPARAM lParam)
 {
-	uint16_t userID = static_cast<uint16_t>(wParam);
-	Direction direction = static_cast<Direction>(lParam);
+	auto* sync = reinterpret_cast<S2COtherPlayerPosSyncPacket*>(lParam);
 
-	auto it = m_otherPlayers.find(userID);
+	auto it = m_otherPlayers.find(sync->CharacterID);
 	if (it != m_otherPlayers.end())
 	{
-		switch (direction)
-		{
-		case Direction::Left:
-			it->second->position.x -= 10;
-			break;
-		case Direction::Right:
-			it->second->position.x += 10;
-			break;
-		case Direction::Up:
-			it->second->position.y -= 10;
-			break;
-		case Direction::Down:
-			it->second->position.y += 10;
-			break;
-		default:
-			break;
-		}
+		it->second->SetTargetPosition(sync->PosX, sync->PosY);
+		it->second->SetDirection(static_cast<Direction>(sync->MoveDirection));
 	}
-	Invalidate(false);
 
 	return 0;
 }
 
 LRESULT CTestView::OnPlayerPosSync(WPARAM wParam, LPARAM lParam)
 {
-	uint32_t ackFrame = static_cast<uint32_t>(wParam);
-	Vector3 serverPos = *reinterpret_cast<Vector3*>(&lParam);
-	CPoint serverPosPoint(static_cast<int>(serverPos.x), static_cast<int>(serverPos.y));
+	//uint32_t ackFrame = static_cast<uint32_t>(wParam);
+	//Vector3 serverPos = *reinterpret_cast<Vector3*>(&lParam);
+	//CPoint serverPosPoint(static_cast<int>(serverPos.x), static_cast<int>(serverPos.y));
 
-	const float ALLOWED_ERROR = 5.0f;
+	//const float ALLOWED_ERROR = 5.0f;
 
-	float dx = m_playerPos.x - serverPosPoint.x;
-	float dy = m_playerPos.y - serverPosPoint.y;
-	float distance = sqrtf(dx * dx + dy * dy);
+	//float dx = m_playerPos.x - serverPosPoint.x;
+	//float dy = m_playerPos.y - serverPosPoint.y;
+	//float distance = sqrtf(dx * dx + dy * dy);
 
-	if (distance > ALLOWED_ERROR)
-	{
-		// 보간 방식으로 위치 보정
-		const float correctionRate = 0.2f;
-		m_playerPos.x += (serverPosPoint.x - m_playerPos.x) * correctionRate;
-		m_playerPos.y += (serverPosPoint.y - m_playerPos.y) * correctionRate;
+	//if (distance > ALLOWED_ERROR)
+	//{
+	//	// 보간 방식으로 위치 보정
+	//	const float correctionRate = 0.2f;
+	//	m_playerPos.x += (serverPosPoint.x - m_playerPos.x) * correctionRate;
+	//	m_playerPos.y += (serverPosPoint.y - m_playerPos.y) * correctionRate;
 
-		// 이전 입력 제거
-		while (!m_inputBuffer.empty() && m_inputBuffer.front().frameID <= ackFrame)
-		{
-			m_inputBuffer.pop_front();
-		}
+	//	// 이전 입력 제거
+	//	while (!m_inputBuffer.empty() && m_inputBuffer.front().frameID <= ackFrame)
+	//	{
+	//		m_inputBuffer.pop_front();
+	//	}
 
-		// 남은 입력 재적용
-		const float fixedDelta = 0.1f;
-		float speed = 150.0f;
+	//	// 남은 입력 재적용
+	//	const float fixedDelta = 0.1f;
+	//	float speed = 150.0f;
 
-		for (const auto& input : m_inputBuffer)
-		{
-			float distance = speed * fixedDelta;
+	//	for (const auto& input : m_inputBuffer)
+	//	{
+	//		float distance = speed * fixedDelta;
 
-			switch (input.dir)
-			{
-			case Direction::Left:  m_playerPos.x -= distance; break;
-			case Direction::Right: m_playerPos.x += distance; break;
-			case Direction::Up:    m_playerPos.y -= distance; break;
-			case Direction::Down:  m_playerPos.y += distance; break;
-			}
+	//		switch (input.dir)
+	//		{
+	//		case Direction::Left:  m_playerPos.x -= distance; break;
+	//		case Direction::Right: m_playerPos.x += distance; break;
+	//		case Direction::Up:    m_playerPos.y -= distance; break;
+	//		case Direction::Down:  m_playerPos.y += distance; break;
+	//		}
 
-			ClampPosition(m_playerPos);
-		}
+	//		ClampPosition(m_playerPos);
+	//	}
 
-		Invalidate(FALSE);
-	}
+	//	Invalidate(FALSE);
+	//}
 
 	return 0;
 }
@@ -607,22 +603,21 @@ LRESULT CTestView::OnRespawnMonster(WPARAM wParam, LPARAM lParam)
 
 LRESULT CTestView::OnPlayerAttack(WPARAM wParam, LPARAM lParam)
 {
-	uint16_t userID = static_cast<uint16_t>(wParam);
+	uint16_t characterID = static_cast<uint16_t>(wParam);
 	Direction dir = static_cast<Direction>(lParam);
 
-	auto it = m_otherPlayers.find(userID);
+	auto it = m_otherPlayers.find(characterID);
 	if (it != m_otherPlayers.end())
 	{
-		CPoint pos;
-		pos.x = it->second->position.x;
-		pos.y = it->second->position.y;
+		Vector3 p = it->second->GetPosition();
+		CPoint pos = CPoint(p.x, p.y);
 
 		AttackInfo info;
 		info.startTime = GetTickCount64();
 		info.startPos = pos;
 		info.dir = dir;
 
-		m_otherAttacks[userID] = info;
+		m_otherAttacks[characterID] = info;
 		Invalidate(false);
 	}
 

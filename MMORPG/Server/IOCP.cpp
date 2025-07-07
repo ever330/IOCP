@@ -102,6 +102,8 @@ void IOCP::Initialize()
 	{
 		return;
 	}
+
+	m_heartBeatThread = std::thread(&IOCP::HeartBeatThread, this);
 }
 
 void IOCP::Finalize()
@@ -205,6 +207,7 @@ void IOCP::BroadCast(std::shared_ptr<char[]> packet, int byteLength)
 
 void IOCP::UpdateHeartBeatTime(unsigned int sessionID)
 {
+	std::lock_guard<std::mutex> lock(m_mutex); // 세션 접근 동기화
 	auto it = m_sessions.find(sessionID);
 	if (it != m_sessions.end())
 	{
@@ -320,27 +323,29 @@ void IOCP::HeartBeatThread()
 		std::this_thread::sleep_for(std::chrono::milliseconds(HEARTBEAT_INTERVAL_MS));
 
 		auto now = std::chrono::steady_clock::now();
+		std::vector<unsigned int> toErase;
 
-		std::lock_guard<std::mutex> lock(m_mutex); // 세션 접근 동기화  
-
-		for (auto& sessionPair : m_sessions)
 		{
-			unsigned int sessionID = sessionPair.first;
-			auto& session = sessionPair.second;
+			std::lock_guard<std::mutex> lock(m_mutex);
 
-			// 타임아웃 체크  
-			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - session->lastHeartbeatTime);
-			if (duration.count() > TIMEOUT_MS)
+			for (const auto& [sessionID, session] : m_sessions)
 			{
-				// 응답 없음: 연결 종료 처리  
-				EraseSession(sessionID);
-				MainServer::Instance().Log("세션 타임아웃: " + std::to_string(sessionID));
-				MainServer::Instance().DisconnectUserBySessionID(sessionID);
-				continue;
-			}
+				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - session->lastHeartbeatTime);
+				if (duration.count() > TIMEOUT_MS)
+				{
+					toErase.push_back(sessionID); // 삭제 예약
+					continue;
+				}
 
-			// 하트비트 패킷 전송  
-			SendHeartBeat(sessionID);
+				SendHeartBeat(sessionID); // 하트비트 전송
+			}
+		}
+
+		for (auto sessionID : toErase)
+		{
+			EraseSession(sessionID);
+			MainServer::Instance().Log("세션 타임아웃: " + std::to_string(sessionID));
+			MainServer::Instance().DisconnectUserBySessionID(sessionID);
 		}
 	}
 }

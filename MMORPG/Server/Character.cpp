@@ -135,9 +135,6 @@ void Character::Move(float deltaTime)
 			m_position.x = MAP_MAX_X + 10;
 		break;
 	}
-
-	std::string logMessage = "Character moved to position: (" + std::to_string(m_position.x) + ", " + std::to_string(m_position.y) + ")";
-	MainServer::Instance().Log(logMessage);
 }
 
 int Character::GetRequiredExpForLevel(int level)

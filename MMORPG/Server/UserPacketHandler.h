@@ -22,6 +22,7 @@ private:
 	void HandleCreateCharacter(std::shared_ptr<User> user, PacketBase* pac);
 	void HandleSelectCharacter(std::shared_ptr<User> user, PacketBase* pac);
 	void HandleRanking(std::shared_ptr<User> user, PacketBase* pac);
+	void HandlePlayerPosSync(std::shared_ptr<User> user, PacketBase* pac);
 
     // 임시 유저 ID 생성용
 	unsigned int m_userID = 1;

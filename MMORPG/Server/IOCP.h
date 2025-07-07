@@ -52,6 +52,8 @@ private:
     unsigned int m_nextSessionID;
     std::queue<unsigned int> m_availableSessionIDs;
 
+	std::thread m_heartBeatThread;
+
     std::unordered_map<OVERLAPPED*, std::shared_ptr<IOData>> m_ioDataMap;
 
     std::mutex m_mutex;
