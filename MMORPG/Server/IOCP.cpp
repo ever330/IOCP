@@ -67,23 +67,6 @@ void IOCP::Initialize()
 
 	CreateIoCompletionPort((HANDLE)listenSocket, m_hIocp, 0, 0);
 
-	lpfnAcceptEx = NULL;
-	GuidAcceptEx = WSAID_ACCEPTEX;
-	DWORD dwBytes;
-
-	int result = WSAIoctl(listenSocket, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&GuidAcceptEx, sizeof(GuidAcceptEx),
-		&lpfnAcceptEx, sizeof(lpfnAcceptEx),
-		&dwBytes, NULL, NULL);
-
-	if (result == SOCKET_ERROR)
-	{
-		MainServer::Instance().Log("WSAIoctl ½ÇÆÐ: " + std::to_string(WSAGetLastError()));
-		closesocket(listenSocket);
-		WSACleanup();
-		return;
-	}
-
 	m_nextSessionID = 1;
 
 	std::shared_ptr<IOData> ioData = std::make_shared<IOData>();
@@ -241,9 +224,8 @@ bool IOCP::PostAccept(std::shared_ptr<IOData> ioData)
 
 	DWORD dwBytes;
 
-	bool result = lpfnAcceptEx(m_serverSession->socket, client->socket, ioData->GetBuffer(),
-		0,
-		LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
+	bool result = AcceptEx(m_serverSession->socket, client->socket, ioData->GetBuffer(),
+		0, LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
 		&dwBytes, &(ioData->overlapped));
 
 	if (!result)

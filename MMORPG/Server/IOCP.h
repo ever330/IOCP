@@ -58,7 +58,4 @@ private:
 
     std::mutex m_mutex;
 	std::mutex m_ioMapMutex;
-
-    LPFN_ACCEPTEX lpfnAcceptEx;
-    GUID GuidAcceptEx;
 };
