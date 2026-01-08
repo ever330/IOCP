@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "Map.h"
 #include "User.h"
 #include "Monster.h"
@@ -10,29 +11,29 @@ Map::Map(int id)
 
 Map::~Map()
 {
-	// ¸Ê Á¦°Å
+	// ì†Œë©¸ì
 }
 
 void Map::Initialize()
 {
 	for (int i = 1; i <= m_monsterSpawnCount; ++i)
 	{
-		// ÀÓ½Ã ½ºÆù À§Ä¡. Map °ü·Ã DB°¡ ÀÖÀ» °æ¿ì, °¢ ¸Ê º°·Î ¸ó½ºÅÍ ½ºÆùÀ§Ä¡°¡ Á¤ÇØÁ®¾ß ÇÔ
+		// ë‹¤ìŒ ëª¬ìŠ¤í„° ID ë¶€ì—¬. Map ì •ë³´ë¥¼ DBì—ì„œ ì½ì–´ì˜¬ ë•Œ ëª¬ìŠ¤í„° ì •ë³´ë„ ê°™ì´ ì½ì–´ì•¼ í•¨
 		Vector3 spawnPos = { GetRandomFloat(0.0f, MAP_MAX_X), GetRandomFloat(0.0f, MAP_MAX_Y), 0.0f };
 		m_monsters.insert({ i, std::make_shared<Monster>(1, spawnPos) });
 	}
-	// ÀÓ½Ã À¯Àú ½ºÆù À§Ä¡.
+	// ìœ ì € ìŠ¤í° ìœ„ì¹˜ ì„¤ì •.
 	m_userSpawnPos.x = 100.0f;
 	m_userSpawnPos.y = 100.0f;
 }
 
 void Map::Update(float deltaTime, int tickCount)
 {
-	// ¸Ê¿¡ À¯Àú°¡ ¾øÀ¸¸é ¾÷µ¥ÀÌÆ® ÇÏÁö ¾ÊÀ½
+	// ë§µì— ìœ ì €ê°€ ì—†ìœ¼ë©´ ì—…ë°ì´íŠ¸ í•  í•„ìš” ì—†ìŒ
 	if (m_users.empty())
 		return;
 
-	// À¯Àú ¾÷µ¥ÀÌÆ®
+	// ìœ ì € ì—…ë°ì´íŠ¸
 	for (int userID : m_users)
 	{
 		std::shared_ptr<User> user = MainServer::Instance().GetUserByID(userID);
@@ -40,19 +41,19 @@ void Map::Update(float deltaTime, int tickCount)
 		if (!user)
 			continue;
 
-		user->GetCharacter().Update(deltaTime); // ¹æÇâ¿¡ µû¶ó ÁÂÇ¥ ÀÌµ¿
+		user->GetCharacter().Update(deltaTime); // ìºë¦­í„° ìƒíƒœ ì—…ë°ì´íŠ¸ (ì¿¨íƒ€ì„ ë“±)
 	}
 
-	// ¸ó½ºÅÍ ¾÷µ¥ÀÌÆ®
+	// ëª¬ìŠ¤í„° ì—…ë°ì´íŠ¸
 	for (auto& monster : m_monsters)
 	{
 		monster.second->Update(m_users);
 	}
 
-	// 10Æ½¸¶´Ù À¯Àú ÁÂÇ¥ »óÅÂ ºê·ÎµåÄ³½ºÆ®
-	if (tickCount % 10 == 0) 
+	// 10í‹±ë§ˆë‹¤ ìœ ì € ìºë¦­í„° ìƒíƒœ ë¸Œë¡œë“œìºìŠ¤íŠ¸
+	if (tickCount % 10 == 0)
 	{
-		PlayerStateUpdate();  // À¯Àú ÁÂÇ¥ »óÅÂ ÀüÃ¼ ºê·ÎµåÄ³½ºÆ®
+		PlayerStateUpdate();  // ìœ ì € ìºë¦­í„° ìƒíƒœ ì „ì²´ ë¸Œë¡œë“œìºìŠ¤íŠ¸
 	}
 
 	MonsterStateUpdate();
@@ -178,7 +179,7 @@ void Map::PlayerAttack(std::shared_ptr<User> user, C2SPlayerAttackPacket pac)
 	MainServer::Instance().BroadCast(m_users, ackPac);
 
 	Vector3 playerPos = user.get()->GetCharacter().GetPosition();
-	Direction dir = (Direction)pac.AttackDirection; // ÆĞÅ¶¿¡ Æ÷ÇÔµÇ¾î ÀÖ¾î¾ß ÇÔ
+	Direction dir = (Direction)pac.AttackDirection; // íŒ¨í‚·ì—ì„œ ë°©í–¥ì„ ì¶”ì¶œí•´ì„œ
 
 	AttackRect hitBox = GetAttackRect(playerPos, dir);
 
@@ -204,7 +205,7 @@ void Map::PlayerAttack(std::shared_ptr<User> user, C2SPlayerAttackPacket pac)
 			if (expOpt.has_value())
 			{
 				int expGained = expOpt.value();
-				user->GetCharacter().AddExp(expGained);  // °æÇèÄ¡ ´©Àû
+				user->GetCharacter().AddExp(expGained);  // ê²½í—˜ì¹˜ ì¶”ê°€
 
 				MainServer::Instance().SendExpGain(user, expGained);
 			}
@@ -240,7 +241,7 @@ void Map::SpawnMonster()
 	{
 		if (monster.second->IsDead())
 		{
-			// ¸ó½ºÅÍ ¸®½ºÆù
+			// ëª¬ìŠ¤í„° ë¦¬ìŠ¤í°
 			Vector3 spawnPos = { 150.0f, 150.0f, 0.0f };
 			monster.second->Respawn(spawnPos);
 

@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "RedisManager.h"
 #include "MainServer.h"
 
@@ -12,15 +13,15 @@ bool RedisManager::Connect(const std::string& ip, int port, const std::string& p
 	m_context = redisConnect(ip.c_str(), port);
 	if (!m_context || m_context->err)
 	{
-		MainServer::Instance().Log("Redis ø¨∞· Ω«∆–: " + std::string(m_context ? m_context->errstr : "NULL"));
+		MainServer::Instance().Log("Redis Ï¥àÍ∏∞Ìôî Ïã§Ìå®: " + std::string(m_context ? m_context->errstr : "NULL"));
 		return false;
 	}
 
-	// ∫Òπ–π¯»£ ¿Œ¡ı
+	// ÎπÑÎ∞ÄÎ≤àÌò∏ Ïù∏Ï¶ù
 	redisReply* reply = (redisReply*)redisCommand(m_context, "AUTH %s", password.c_str());
 	if (!reply || m_context->err)
 	{
-		MainServer::Instance().Log("Redis ¿Œ¡ı Ω«∆–: " + std::string(m_context->errstr));
+		MainServer::Instance().Log("Redis Ïù∏Ï¶ù Ïã§Ìå®: " + std::string(m_context->errstr));
 		redisFree(m_context);
 		m_context = nullptr;
 		return false;
@@ -63,37 +64,48 @@ void RedisManager::RemoveMapping(unsigned int sessionID)
 
 void RedisManager::UpdateCharacterToRedis(int charID, int level, uint64_t exp, const std::string& name)
 {
-	// ¡°ºˆ ∞ËªÍ
+	std::scoped_lock lock(m_mutex);
+
+	// Ï†êÏàò Í≥ÑÏÇ∞
 	uint64_t score = (uint64_t)level * 10000000000ULL + exp;
 
-	// ZSET: ∑©≈∑ µÓ∑œ
+	// ZSET: Îû≠ÌÇπ Îì±Î°ù
 	redisReply* r1 = (redisReply*)redisCommand(m_context,
 		"ZADD CharacterRanking %llu %d", score, charID);
-	freeReplyObject(r1);
+	if (r1) freeReplyObject(r1);
 
-	// HASH: ƒ≥∏Ø≈Õ ¡§∫∏ ¿˙¿Â
+	// HASH: Ï∫êÎ¶≠ÌÑ∞ Ï†ïÎ≥¥ Ï†ÄÏû•
 	redisReply* r2 = (redisReply*)redisCommand(m_context,
 		"HMSET CharacterInfo:%d Level %d Exp %llu Name %s",
 		charID, level, exp, name.c_str());
-	freeReplyObject(r2);
+	if (r2) freeReplyObject(r2);
 }
 
 std::vector<S2CRankingInfo> RedisManager::GetTopRankingList(int count)
 {
+	std::scoped_lock lock(m_mutex);
 	std::vector<S2CRankingInfo> result;
 
 	redisReply* reply = (redisReply*)redisCommand(m_context, "ZREVRANGE CharacterRanking 0 %d", count - 1);
 	if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
+	{
+		if (reply) freeReplyObject(reply);
 		return result;
+	}
 
 	for (size_t i = 0; i < reply->elements; ++i)
 	{
+		if (!reply->element[i] || !reply->element[i]->str)
+			continue;
+
 		int charID = std::stoi(reply->element[i]->str);
 
 		redisReply* info = (redisReply*)redisCommand(m_context,
 			"HMGET CharacterInfo:%d Level Exp Name", charID);
 
-		if (info && info->type == REDIS_REPLY_ARRAY && info->elements == 3)
+		if (info && info->type == REDIS_REPLY_ARRAY && info->elements == 3 &&
+			info->element[0] && info->element[0]->str &&
+			info->element[2] && info->element[2]->str)
 		{
 			S2CRankingInfo ranker{};
 			ranker.CharacterID = charID;
@@ -103,7 +115,7 @@ std::vector<S2CRankingInfo> RedisManager::GetTopRankingList(int count)
 			result.push_back(ranker);
 		}
 
-		freeReplyObject(info);
+		if (info) freeReplyObject(info);
 	}
 
 	freeReplyObject(reply);
@@ -112,6 +124,8 @@ std::vector<S2CRankingInfo> RedisManager::GetTopRankingList(int count)
 
 unsigned int RedisManager::GetCharacterRanking(int charID)
 {
+	std::scoped_lock lock(m_mutex);
+
 	redisReply* reply = (redisReply*)redisCommand(m_context,
 		"ZREVRANK CharacterRanking %d", charID);
 
@@ -119,7 +133,7 @@ unsigned int RedisManager::GetCharacterRanking(int charID)
 	if (reply && reply->type == REDIS_REPLY_INTEGER)
 		rank = (int)reply->integer;
 	rank++;
-	freeReplyObject(reply);
+	if (reply) freeReplyObject(reply);
 	return rank;
 }
 

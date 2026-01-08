@@ -8,11 +8,12 @@
 #include "MapManager.h"
 #include "DBManager.h"
 #include "IOCP.h"
+#include "RecvBuffer.h"
 
 class User;
 class Map;
 
-struct PacketJob 
+struct PacketJob
 {
 	unsigned int userID;
 	unsigned int sessionID;
@@ -38,7 +39,7 @@ public:
 	}
 
 	bool StartServer();
-	void PushData(unsigned int sessionID, char* data);
+	void PushData(unsigned int sessionID, const char* data, int dataLen);
 	void StopServer();
 	void DisconnectUserBySessionID(unsigned int sessionID);
 	void SendPacket(unsigned int userID, PacketBase* packet);
@@ -68,14 +69,14 @@ private:
 	void PacketProcess(std::shared_ptr<User> user, PacketBase* pac);
 	void PacketProcess(unsigned int sessionID, PacketBase* pac);
 
-	void RegisterPacketHandlers(); // ÇÚµé·¯ µî·Ï ÇÔ¼ö
+	void RegisterPacketHandlers(); // íŒ¨í‚· í•¸ë“¤ëŸ¬ ë“±ë¡ í•¨ìˆ˜
 
-	void OutputServerMessages(); // ¼­¹ö ¸Ş½ÃÁö Ãâ·Â ÇÔ¼ö
+	void OutputServerMessages(); // ë™ì‹œì— ë¡œê·¸ ë©”ì‹œì§€ ì¶œë ¥ í•¨ìˆ˜
 	void LoadAllCharactersToRedis();
 
 	bool IsAuthPacket(uint16_t packetID) const;
 
-	// Æ¯Á¤ ÁÖ±â¸¶´Ù DB¿¡ À¯ÀúÁ¤º¸ ÀúÀå
+	// ì£¼ê¸°ì ìœ¼ë¡œ DBì— ìœ ì € ì •ë³´ ì €ì¥
 	void PeriodSave();
 
 	std::unique_ptr<IOCP> m_IOCP;
@@ -84,22 +85,22 @@ private:
 	mutable std::mutex m_mutex;
 	std::unordered_map<unsigned int, std::shared_ptr<User>> m_users;
 
-	concurrency::concurrent_queue<std::string> m_logQueue; // ·Î±× ¸Ş½ÃÁö Å¥
+	concurrency::concurrent_queue<std::string> m_logQueue; // ë¡œê·¸ì¸ ë¡œê·¸ ë©”ì‹œì§€ í
 
 	PacketDispatcher m_dispatcher;
 	MapManager m_mapManager;
 
-	// ÆĞÅ¶ Ã³¸® ½º·¹µå °ü·Ã.
+	// íŒ¨í‚· ì²˜ë¦¬ ì“°ë ˆë“œ ê´€ë ¨
 	std::vector<std::thread> m_packetWorkers;
 	std::vector<std::queue<PacketJob>> m_workerQueues;
 	std::mutex m_workerMutexes[PACKET_THREAD];
 	std::condition_variable m_workerConds[PACKET_THREAD];
 	std::atomic<bool> m_isRunning = false;
 
-	// ¼­¹ö ¸Ş½ÃÁö Ãâ·Â °ü·Ã.
+	// ë™ì‹œì— ë¡œê·¸ ë©”ì‹œì§€ ì¶œë ¥ ê´€ë ¨
 	std::thread m_outputThread;
 
-	// ÀÓ½Ã À¯Àú ID »ı¼º¿ë
-	unsigned int m_nextUserID = 1; // À¯Àú ID´Â 1ºÎÅÍ ½ÃÀÛ
+	// ë‹¤ìŒ ìœ ì € ID ìƒì„±ìš©
+	unsigned int m_nextUserID = 1; // ìœ ì € IDëŠ” 1ë¶€í„° ì‹œì‘
 };
 

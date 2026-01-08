@@ -1,7 +1,12 @@
 #ifndef PCH_H
 #define PCH_H
 
-#define _WINSOCKAPI_
+// Winsock2ë¥¼ Windows.h ë³´ë‹¤ ë¨¼ì € include í•´ì•¼ í•¨
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
+#include <mswsock.h>
+#include <Ws2tcpip.h>
+#include <windows.h>
 
 #include <iostream>
 #include <vector>
@@ -11,7 +16,6 @@
 #include <map>
 #include <sstream>
 #include <ctime>
-#include <Windows.h>
 #include <time.h>
 #include <functional>
 #include <unordered_map>
@@ -19,14 +23,12 @@
 #include <random>
 #include <concurrent_queue.h>
 #include <optional>
+#include <atomic>
 
-// Socket
-#include <winsock2.h>
-#include <windows.h>
-#include <mswsock.h>
-#include <Ws2tcpip.h>
+// ë©”ëª¨ë¦¬ ëˆ„ìˆ˜ ê²€ì‚¬
+#include <vld.h>
 
-// ¸ÖÆ¼½º·¹µå °ü·Ã
+// ë©€í‹°ì“°ë ˆë”© ê´€ë ¨
 #include <thread>
 #include <mutex>
 
@@ -36,7 +38,7 @@
 // Redis
 #include <hiredis/hiredis.h>
 
-// ¾ÏÈ£È­¿ë
+// ì•”í˜¸í™”ìš©
 #include <openssl/sha.h>
 
 #pragma comment(lib, "ws2_32.lib")

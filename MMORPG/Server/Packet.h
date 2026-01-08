@@ -19,17 +19,17 @@ enum PacketID : uint16_t
 	C2SRanking,
 	S2CRankingAck,
 
-	// ±âÁ¸ ÀÓ½Ã¿ë
+	// ì±„íŒ… ê´€ë ¨
 	C2SSetName = 100,
 	S2CNewUserAlert,
 	C2SSendMSG,
 	S2CSendMSG,
 
-	// ÇÏÆ®ºñÆ®
+	// í•˜íŠ¸ë¹„íŠ¸
 	C2SHeartBeat = 200,
 	S2CHeartBeat,
 
-	// ¸Ê °ü·Ã
+	// ë§µ ê´€ë ¨
 	C2SChangeMap = 300,
 	S2CChangeMapAck,
 	S2CPlayerEnter,
@@ -37,12 +37,12 @@ enum PacketID : uint16_t
 	S2CPlayerState,
 	C2SChangeMapByPortal,
 
-	// ¸ó½ºÅÍ °ü·Ã
+	// ëª¬ìŠ¤í„° ê´€ë ¨
 	S2CMonsterRespawn = 400,
 	S2CMonsterState,
 	S2CMonsterHit,
 
-	// ÇÃ·¹ÀÌ¾î °ü·Ã
+	// í”Œë ˆì´ì–´ í–‰ë™ ê´€ë ¨
 	C2SPlayerMove = 500,
 	S2COtherPlayerPosSync,
 	C2SPlayerStop,
@@ -71,7 +71,7 @@ struct C2SCheckIDPacket
 
 struct S2CCheckIDAckPacket
 {
-	uint8_t Result; // 0: »ç¿ë °¡´É, 1: »ç¿ë ºÒ°¡
+	uint8_t Result; // 0: ì‚¬ìš© ê°€ëŠ¥, 1: ì‚¬ìš© ë¶ˆê°€
 };
 
 struct C2SLoginPacket
@@ -82,9 +82,9 @@ struct C2SLoginPacket
 
 struct S2CLoginAckPacket
 {
-	uint8_t Result; // 0: ¼º°ø, 1: ½ÇÆĞ
-	uint16_t UserID; // ·Î±×ÀÎ ¼º°ø ½Ã »ç¿ëÀÚ ID ¹İÈ¯
-	char ID[ID_SIZE]; // ·Î±×ÀÎ ¼º°ø ½Ã »ç¿ëÀÚ ÀÌ¸§ ¹İÈ¯
+	uint8_t Result; // 0: ì„±ê³µ, 1: ì‹¤íŒ¨
+	uint16_t UserID; // ë¡œê·¸ì¸ ì„±ê³µ ì‹œ ìœ ì € ID ë°˜í™˜
+	char ID[ID_SIZE]; // ë¡œê·¸ì¸ ì„±ê³µ ì‹œ ìœ ì € ì´ë¦„ ë°˜í™˜
 	uint16_t CharacterCount;
 };
 
@@ -92,7 +92,7 @@ struct S2CCharacterInfo
 {
 	uint16_t CharacterID;
 	char Name[NAME_SIZE];
-	uint8_t Gender; // 0: ³²¼º, 1: ¿©¼º
+	uint8_t Gender; // 0: ë‚¨ì„±, 1: ì—¬ì„±
 	uint16_t Level;
 	uint32_t Exp;
 };
@@ -105,7 +105,7 @@ struct C2SSignUpPacket
 
 struct S2CSignUpAckPacket
 {
-	uint8_t Result; // 0: ¼º°ø, 1: ½ÇÆĞ
+	uint8_t Result; // 0: ì„±ê³µ, 1: ì‹¤íŒ¨
 };
 
 struct C2SCheckCharacterNamePacket
@@ -115,21 +115,21 @@ struct C2SCheckCharacterNamePacket
 
 struct S2CCheckCharacterNameAckPacket
 {
-	uint8_t Result; // 0: »ç¿ë °¡´É, 1: »ç¿ë ºÒ°¡
+	uint8_t Result; // 0: ì‚¬ìš© ê°€ëŠ¥, 1: ì‚¬ìš© ë¶ˆê°€
 };
 
 struct C2SCreateCharacterPacket
 {
 	char Name[NAME_SIZE];
-	uint8_t Gender; // 0: ³²¼º, 1: ¿©¼º
+	uint8_t Gender; // 0: ë‚¨ì„±, 1: ì—¬ì„±
 };
 
 struct S2CCreateCharacterAckPacket
 {
-	uint8_t Result; // 0: ¼º°ø, 1: ½ÇÆĞ
+	uint8_t Result; // 0: ì„±ê³µ, 1: ì‹¤íŒ¨
 	uint16_t CharacterID;
 	char Name[NAME_SIZE];
-	uint8_t Gender; // 0: ³²¼º, 1: ¿©¼º
+	uint8_t Gender; // 0: ë‚¨ì„±, 1: ì—¬ì„±
 };
 
 struct C2SSelectCharacterPacket
@@ -139,7 +139,7 @@ struct C2SSelectCharacterPacket
 
 struct S2CSelectCharacterAckPacket
 {
-	uint8_t Result; // 0: ¼º°ø, 1: ½ÇÆĞ
+	uint8_t Result; // 0: ì„±ê³µ, 1: ì‹¤íŒ¨
 	uint16_t CharacterID;
 	char Name[NAME_SIZE];
 	uint16_t Level;
@@ -289,14 +289,14 @@ struct S2CMonsterStateInfo
 
 struct C2SPlayerMovePacket
 {
-	uint8_t MoveDirection; // 0: »ó, 1: ÇÏ, 2: ÁÂ, 3: ¿ì
+	uint8_t MoveDirection; // 0: ìƒ, 1: í•˜, 2: ì¢Œ, 3: ìš°
 	uint32_t FrameID;
 };
 
 struct S2COtherPlayerPosSyncPacket
 {
 	uint16_t CharacterID;
-	uint8_t MoveDirection;        // ÀÌµ¿ ¹æÇâ (¾Ö´Ï¸ŞÀÌ¼Ç¿ë)
+	uint8_t MoveDirection; // ì´ë™ ë°©í–¥ (ì„œë²„ì—ì„œ ë°˜í™˜)
 	float PosX;
 	float PosY;
 	float PosZ;
@@ -326,7 +326,7 @@ struct S2CPlayerPosSyncPacket
 	float PosY;
 	float PosZ;
 	uint32_t AckFrameID;
-};;
+};
 
 struct C2SPlayerAttackPacket
 {

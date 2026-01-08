@@ -11,34 +11,34 @@ struct Vector3
 	Vector3(float x, float y, float z)
 		: x(x), y(y), z(z) {}
 
-	// µ¡¼À
+	// ë§ì…ˆ
 	Vector3 operator+(const Vector3& other) const
 	{
 		return { x + other.x, y + other.y, z + other.z };
 	}
 
-	// »¬¼À
+	// ëº„ì…ˆ
 	Vector3 operator-(const Vector3& other) const
 	{
 		return { x - other.x, y - other.y, z - other.z };
 	}
 
-	// ½ºÄ®¶ó °ö
+	// ìŠ¤ì¹¼ë¼ ê³±
 	Vector3 operator*(float scalar) const
 	{
 		return { x * scalar, y * scalar, z * scalar };
 	}
 
-	// º¤ÅÍ Á¤±ÔÈ­
+	// ë²¡í„° ì •ê·œí™”
 	Vector3 Normalize() const
 	{
-		float length = sqrtf(x * x + y * y); // z ¹«½Ã
+		float length = sqrtf(x * x + y * y); // z ë¬´ì‹œ
 		if (length == 0.0f)
 			return { 0.0f, 0.0f, 0.0f };
 		return { x / length, y / length, z };
 	}
 
-	// °Å¸® °è»ê (z ¹«½Ã)
+	// ê±°ë¦¬ ê³„ì‚° (z ë¬´ì‹œ)
 	float DistanceTo(const Vector3& other) const
 	{
 		float dx = x - other.x;

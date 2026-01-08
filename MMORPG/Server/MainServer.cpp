@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "MainServer.h"
 #include "User.h"
 #include "Map.h"
@@ -6,22 +7,31 @@
 #include "UserPacketHandler.h"
 #include "AuthPacketHandler.h"
 #include "RedisManager.h"
+#include "Config.h"
 
 bool MainServer::StartServer()
 {
+	// ì„¤ì • íŒŒì¼ ë¡œë“œ
+	if (!ConfigManager::Instance().LoadConfig("server.config"))
+	{
+		Log("ì„¤ì • íŒŒì¼ ë¡œë“œ ì‹¤íŒ¨ - ê¸°ë³¸ê°’ ì‚¬ìš©");
+	}
+
+	const auto& config = ConfigManager::Instance().GetConfig();
+
 	m_IOCP = std::make_unique<IOCP>();
 	m_IOCP->Initialize();
 
 	m_DBManager = std::make_unique<DBManager>();
-	m_DBManager->Initialize("tcp://127.0.0.1:3306", "root", "rainbow@@", "rainbow");
+	m_DBManager->Initialize(config.dbHost, config.dbUser, config.dbPassword, config.dbSchema);
 
-	if (RedisManager::Instance().Connect("127.0.0.1", 6379, "1234"))
+	if (RedisManager::Instance().Connect(config.redisHost, config.redisPort, config.redisPassword))
 	{
-		Log("Redis ¿¬°á ¼º°ø");
+		Log("Redis ì´ˆê¸°í™” ì„±ê³µ");
 	}
 	else
 	{
-		Log("Redis ¿¬°á ½ÇÆĞ");
+		Log("Redis ì´ˆê¸°í™” ì‹¤íŒ¨");
 	}
 	LoadAllCharactersToRedis();
 
@@ -48,32 +58,44 @@ bool MainServer::StartServer()
 	return false;
 }
 
-void MainServer::PushData(unsigned int sessionID, char* data)
+void MainServer::PushData(unsigned int sessionID, const char* data, int dataLen)
 {
-	// ¼ö½ÅÇÑ µ¥ÀÌÅÍ¿¡¼­ ÆĞÅ¶ Å©±â ÀĞ¾î¿À±â
-	PacketBase* header = reinterpret_cast<PacketBase*>(data);
-	int packetSize = header->PacketSize;
+	// íŒ¨í‚· í¬ê¸° ìœ íš¨ì„± ê²€ì‚¬
+	if (dataLen < sizeof(PacketBase) || dataLen > RECV_BUFFER_SIZE)
+	{
+		Log("PushData: ì˜ëª»ëœ íŒ¨í‚· í¬ê¸°: " + std::to_string(dataLen) + " (ì„¸ì…˜ID: " + std::to_string(sessionID) + ")");
+		return;
+	}
 
-	// ÆĞÅ¶ Å©±â¸¸Å­ µ¿Àû ÇÒ´ç
-	PacketBase* pac = reinterpret_cast<PacketBase*>(new char[packetSize]);
+	const PacketBase* header = reinterpret_cast<const PacketBase*>(data);
 
-	// ÀüÃ¼ µ¥ÀÌÅÍ º¹»ç (PacketBase + Body Æ÷ÇÔ)
-	memcpy(pac, data, packetSize);
+	// íŒ¨í‚· í¬ê¸° ê²€ì¦ (í—¤ë”ì˜ í¬ê¸°ì™€ ì‹¤ì œ ë°ì´í„° í¬ê¸° ë¹„êµ)
+	if (header->PacketSize != dataLen)
+	{
+		Log("PushData: íŒ¨í‚· í¬ê¸° ë¶ˆì¼ì¹˜: í—¤ë”=" + std::to_string(header->PacketSize) + ", ì‹¤ì œ=" + std::to_string(dataLen));
+		return;
+	}
 
-	// µğ¹ö±ë Ãâ·Â
-	Log("PushData: ¼¼¼Ç ID " + std::to_string(sessionID) + ", ÆĞÅ¶ Å©±â: " + std::to_string(pac->PacketSize) + ", Å¸ÀÔ: " + std::to_string(pac->PacID));
-
-	if (pac->PacID == PacketID::C2SHeartBeat)
+	// í•˜íŠ¸ë¹„íŠ¸ íŒ¨í‚·ì€ ì—¬ê¸°ì„œ ì²˜ë¦¬
+	if (header->PacID == PacketID::C2SHeartBeat)
 	{
 		m_IOCP->UpdateHeartBeatTime(sessionID);
 		return;
 	}
-	if (pac->PacID > S2CExpGain)
+
+	// íŒ¨í‚· ID ìœ íš¨ì„± ê²€ì‚¬
+	if (header->PacID > S2CExpGain)
 	{
-		Log("PushData: Ã³¸®ÇÒ ¼ö ¾ø´Â ÆĞÅ¶ ID: " + std::to_string(pac->PacID) + " (¼¼¼Ç ID: " + std::to_string(sessionID) + ")");
-		delete[] reinterpret_cast<char*>(pac);
+		Log("PushData: ì²˜ë¦¬ ë¶ˆê°€ëŠ¥í•œ íŒ¨í‚· ID: " + std::to_string(header->PacID) + " (ì„¸ì…˜ID: " + std::to_string(sessionID) + ")");
 		return;
 	}
+
+	// íŒ¨í‚· ë³µì‚¬ (ì‘ì—… ì“°ë ˆë“œì—ì„œ ì²˜ë¦¬í•  ë•Œê¹Œì§€ ìœ ì§€)
+	PacketBase* pac = reinterpret_cast<PacketBase*>(new char[dataLen]);
+	memcpy(pac, data, dataLen);
+
+	// ë””ë²„ê·¸ìš© ë¡œê·¸
+	Log("PushData: ì„¸ì…˜ID " + std::to_string(sessionID) + ", íŒ¨í‚· í¬ê¸°: " + std::to_string(pac->PacketSize) + ", íƒ€ì…: " + std::to_string(pac->PacID));
 
 	unsigned int curUserID = RedisManager::Instance().GetUserIDBySessionID(sessionID);
 
@@ -92,7 +114,7 @@ void MainServer::StopServer()
 	m_isRunning = false;
 	for (int i = 0; i < PACKET_THREAD; ++i)
 	{
-		m_workerConds[i].notify_all();  // ¸ğµç ½º·¹µå ±ú¿ì±â
+		m_workerConds[i].notify_all();  // ëª¨ë“  ì‘ì—… ì“°ë ˆë“œ ê¹¨ìš°ê¸°
 	}
 
 	for (auto& worker : m_packetWorkers)
@@ -126,46 +148,39 @@ void MainServer::DisconnectUserBySessionID(unsigned int sessionID)
 	}
 	else
 	{
-		Log("DisconnectClient: ¼¼¼Ç ID " + std::to_string(sessionID) + "¿¡ ´ëÇÑ À¯Àú°¡ Á¸ÀçÇÏÁö ¾ÊÀ½");
+		Log("DisconnectClient: ì„¸ì…˜ID " + std::to_string(sessionID) + "ì— í•´ë‹¹í•˜ëŠ” ìœ ì € ì—†ìŒ");
 	}
 	RedisManager::Instance().RemoveMapping(sessionID);
 }
 
 void MainServer::SendPacket(unsigned int userID, PacketBase* packet)
 {
-	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
-	memcpy(buffer.get(), packet, packet->PacketSize);
 	auto it = m_users.find(userID);
 	if (it != m_users.end())
 	{
 		unsigned int sessionID = RedisManager::Instance().GetSessionIDByUserID(userID);
-		m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
+		m_IOCP->SendPacket(sessionID, reinterpret_cast<const char*>(packet), packet->PacketSize);
 	}
 	else
 	{
-		Log("SendPacket: À¯Àú ID " + std::to_string(userID) + "¿¡ ´ëÇÑ À¯Àú°¡ Á¸ÀçÇÏÁö ¾ÊÀ½");
+		Log("SendPacket: ìœ ì € ID " + std::to_string(userID) + "ì— í•´ë‹¹í•˜ëŠ” ìœ ì € ì—†ìŒ");
 	}
 }
 
 void MainServer::SendPacketBySessionID(unsigned int sessionID, PacketBase* packet)
 {
-	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
-	memcpy(buffer.get(), packet, packet->PacketSize);
-	m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
+	m_IOCP->SendPacket(sessionID, reinterpret_cast<const char*>(packet), packet->PacketSize);
 }
 
 void MainServer::BroadCast(const std::unordered_set<unsigned int>& userIDs, PacketBase* packet)
 {
-	std::shared_ptr<char[]> buffer(new char[packet->PacketSize]);
-	memcpy(buffer.get(), packet, packet->PacketSize);
-
 	for (const auto& userID : userIDs)
 	{
 		auto it = m_users.find(userID);
 		if (it != m_users.end())
 		{
 			unsigned int sessionID = RedisManager::Instance().GetSessionIDByUserID(userID);
-			m_IOCP->SendPacket(sessionID, buffer, packet->PacketSize);
+			m_IOCP->SendPacket(sessionID, reinterpret_cast<const char*>(packet), packet->PacketSize);
 		}
 	}
 }
@@ -179,7 +194,7 @@ void MainServer::AddUser(std::shared_ptr<User> user)
 	}
 	else
 	{
-		Log("AddUser: À¯Àú ID " + std::to_string(user->GetUserID()) + "´Â ÀÌ¹Ì Á¸ÀçÇÕ´Ï´Ù.");
+		Log("AddUser: ìœ ì € ID " + std::to_string(user->GetUserID()) + "ê°€ ì´ë¯¸ ì¡´ì¬í•¨");
 	}
 }
 
@@ -225,10 +240,10 @@ void MainServer::PacketWorker(int index)
 
 		auto pacID = job.packet->PacID;
 
-		// ·Î±×ÀÎ Àü ÆĞÅ¶ ¸ñ·Ï Ã³¸®
+		// ë¡œê·¸ì¸ ê´€ë ¨ íŒ¨í‚· ë³„ë„ ì²˜ë¦¬
 		if (IsAuthPacket(pacID))
 		{
-			PacketProcess(job.sessionID, job.packet);  // ·Î±×ÀÎ Àü: sessionID·Î Ã³¸®
+			PacketProcess(job.sessionID, job.packet);  // ë¡œê·¸ì¸ íŒ¨í‚·ì€ sessionIDë¡œ ì²˜ë¦¬
 		}
 		else
 		{
@@ -243,11 +258,11 @@ void MainServer::PacketWorker(int index)
 
 			if (user)
 			{
-				PacketProcess(user, job.packet);  // ·Î±×ÀÎ ÈÄ: User °´Ã¼·Î Ã³¸®
+				PacketProcess(user, job.packet);  // ë¡œê·¸ì¸ ì´í›„ User ê°ì²´ë¡œ ì²˜ë¦¬
 			}
 			else
 			{
-				Log("À¯Àú ¾øÀ½: " + std::to_string(job.userID) + " / PacID: " + std::to_string(pacID));
+				Log("ìœ ì € ì—†ìŒ: " + std::to_string(job.userID) + " / PacID: " + std::to_string(pacID));
 				delete[] reinterpret_cast<char*>(job.packet);
 			}
 		}
@@ -258,7 +273,7 @@ void MainServer::PacketProcess(std::shared_ptr<User> user, PacketBase* pac)
 {
 	if (!m_dispatcher.DispatchPacket(user, pac))
 	{
-		Log("Ã³¸®ÇÒ ¼ö ¾ø´Â ÆĞÅ¶ ID: " + std::to_string(pac->PacID) + " (UserID: " + std::to_string(user->GetUserID()) + ")");
+		Log("ì²˜ë¦¬ ë¶ˆê°€ëŠ¥í•œ íŒ¨í‚· ID: " + std::to_string(pac->PacID) + " (UserID: " + std::to_string(user->GetUserID()) + ")");
 	}
 
 	delete[] reinterpret_cast<char*>(pac);
@@ -268,7 +283,7 @@ void MainServer::PacketProcess(unsigned int sessionID, PacketBase* pac)
 {
 	if (!m_dispatcher.DispatchPacket(sessionID, pac))
 	{
-		Log("Ã³¸®ÇÒ ¼ö ¾ø´Â ÆĞÅ¶ ID: " + std::to_string(pac->PacID) + " (SessionID: " + std::to_string(sessionID) + ")");
+		Log("ì²˜ë¦¬ ë¶ˆê°€ëŠ¥í•œ íŒ¨í‚· ID: " + std::to_string(pac->PacID) + " (SessionID: " + std::to_string(sessionID) + ")");
 	}
 
 	delete[] reinterpret_cast<char*>(pac);
@@ -284,16 +299,29 @@ void MainServer::RegisterPacketHandlers()
 
 void MainServer::OutputServerMessages()
 {
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
 	while (m_isRunning)
 	{
 		std::string logMessage;
 		if (m_logQueue.try_pop(logMessage))
 		{
-			std::cout << logMessage << std::endl; // ·Î±× ¸Ş½ÃÁö Ãâ·Â
+			// UTF-8 -> Wide ë³€í™˜ í›„ ì¶œë ¥
+			int wideLen = MultiByteToWideChar(CP_UTF8, 0, logMessage.c_str(), -1, nullptr, 0);
+			if (wideLen > 0)
+			{
+				std::wstring wideStr(wideLen, L'\0');
+				MultiByteToWideChar(CP_UTF8, 0, logMessage.c_str(), -1, &wideStr[0], wideLen);
+
+				// ì½˜ì†”ì— ì¶œë ¥
+				DWORD written;
+				WriteConsoleW(hConsole, wideStr.c_str(), (DWORD)(wideStr.length() - 1), &written, nullptr);
+				WriteConsoleW(hConsole, L"\n", 1, &written, nullptr);
+			}
 		}
 		else
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100)); // ´ë±â ½Ã°£ Á¶Á¤
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
 	}
 }
@@ -306,7 +334,7 @@ void MainServer::LoadAllCharactersToRedis()
 	{
 		RedisManager::Instance().UpdateCharacterToRedis(ch.CharacterID, ch.Level, ch.Experience, ch.Name);
 	}
-	Log("¸ğµç Ä³¸¯ÅÍ Á¤º¸¸¦ Redis¿¡ ·ÎµåÇß½À´Ï´Ù.");
+	Log("ëª¨ë“  ìºë¦­í„° ì •ë³´ë¥¼ Redisì— ë¡œë“œí–ˆìŠµë‹ˆë‹¤.");
 }
 
 bool MainServer::IsAuthPacket(uint16_t packetID) const
@@ -325,7 +353,7 @@ void MainServer::PeriodSave()
 		}
 		if (it.second->GetCharacter().IsDirty())
 		{
-			m_DBManager->UpdateCharacterLevelAndExp(it.second->GetCharacter().GetID(),
+			m_DBManager->UpdateCharacterLevelAndExpAsync(it.second->GetCharacter().GetID(),
 				it.second->GetCharacter().GetLevel(),
 				it.second->GetCharacter().GetExp());
 
@@ -358,10 +386,10 @@ void MainServer::Update()
 	std::chrono::duration<float> elapsed = now - lastTime;
 	float deltaTime = elapsed.count();
 
-	// ¸Ê ¾÷µ¥ÀÌÆ®
+	// ë§µ ë¹„ë™ê¸° ì—…ë°ì´íŠ¸
 	m_mapManager.Update(deltaTime, tickCount);
 
-	// 100Æ½ (10ÃÊ)¸¶´Ù DB¿¡ À¯Àú ·¹º§°ú °æÇèÄ¡ ÀúÀå.
+	// 100í‹± (10ì´ˆ) ë§ˆë‹¤ DBì— ìœ ì € ë ˆë²¨/ê²½í—˜ì¹˜ ì €ì¥
 	if (tickCount % 100 == 0)
 	{
 		PeriodSave();
@@ -395,6 +423,6 @@ void MainServer::SendExpGain(std::shared_ptr<User> user, int expGained)
 
 void MainServer::UserLevelSave(Character* character)
 {
-	m_DBManager->UpdateCharacterLevelAndExp(character->GetID(), character->GetLevel(), character->GetExp());
+	m_DBManager->UpdateCharacterLevelAndExpAsync(character->GetID(), character->GetLevel(), character->GetExp());
 	RedisManager::Instance().UpdateCharacterToRedis(character->GetID(), character->GetLevel(), character->GetExp(), character->GetName());
 }

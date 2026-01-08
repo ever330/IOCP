@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "User.h"
 
 User::User(unsigned int userID, std::string userName) : m_userID(userID), m_userName(std::move(userName)), m_currentMapID(0), m_isConnected(false), m_lastInputFrame(0), m_isCharacterSet(false)

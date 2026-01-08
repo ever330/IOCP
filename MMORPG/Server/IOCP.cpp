@@ -1,484 +1,589 @@
+#include "pch.h"
 #include "IOCP.h"
 #include "MainServer.h"
 #include "Packet.h"
 
 void IOCP::Initialize()
 {
-	WSADATA wsaData;
+    WSADATA wsaData;
+    SOCKADDR_IN serverAddr;
 
-	SOCKADDR_IN serverAddr;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        MainServer::Instance().Log("WSAStartup Error");
+        return;
+    }
 
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-		MainServer::Instance().Log("WSAStartup Error");
+    // ë²„í¼í’€ ì´ˆê¸°í™”
+    InitializeBufferPools();
 
-	SOCKET listenSocket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
+    SOCKET listenSocket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 
-	if (listenSocket == INVALID_SOCKET)
-	{
-		MainServer::Instance().Log("¼­¹ö ¼ÒÄÏ »ı¼º ½ÇÆĞ: " + WSAGetLastError());
-		closesocket(listenSocket);
-		WSACleanup();
-		return;
-	}
+    if (listenSocket == INVALID_SOCKET)
+    {
+        MainServer::Instance().Log("ì„œë²„ ì†Œì¼“ ìƒì„± ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+        WSACleanup();
+        return;
+    }
 
-	memset(&serverAddr, 0, sizeof(serverAddr));
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serverAddr.sin_port = htons(PORT);
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_port = htons(PORT);
 
-	bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-	listen(listenSocket, 5);
+    if (bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+    {
+        MainServer::Instance().Log("bind ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+        closesocket(listenSocket);
+        WSACleanup();
+        return;
+    }
 
-	// IOCP »ı¼º
-	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+    if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
+    {
+        MainServer::Instance().Log("listen ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+        closesocket(listenSocket);
+        WSACleanup();
+        return;
+    }
 
-	if (m_hIocp == NULL)
-	{
-		MainServer::Instance().Log("CreateIoCompletionPort failed with error: " + WSAGetLastError());
-		WSACleanup();
-		return;
-	}
+    // IOCP ìƒì„±
+    m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
-	MainServer::Instance().Log("¼­¹ö ½ÃÀÛ");
+    if (m_hIocp == NULL)
+    {
+        MainServer::Instance().Log("CreateIoCompletionPort failed with error: " + std::to_string(GetLastError()));
+        closesocket(listenSocket);
+        WSACleanup();
+        return;
+    }
 
-	m_serverSession = std::make_shared<Session>();
-	m_serverSession->socket = listenSocket;
-	m_serverSession->sockAddr = serverAddr;
+    MainServer::Instance().Log("ì„œë²„ ì‹œì‘ (í¬íŠ¸: " + std::to_string(PORT) + ")");
 
-	int nZero = 0;
-	int nRet = setsockopt(listenSocket, SOL_SOCKET, SO_SNDBUF, (char*)&nZero, sizeof(nZero));
+    m_serverSession = std::make_shared<Session>();
+    m_serverSession->socket = listenSocket;
+    m_serverSession->sockAddr = serverAddr;
 
-	if (nRet == SOCKET_ERROR)
-	{
-		MainServer::Instance().Log("setsockopt(SNDBUF) ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-		return;
-	}
+    // Listen ì†Œì¼“ì„ IOCPì— ì—°ê²°
+    CreateIoCompletionPort((HANDLE)listenSocket, m_hIocp, 0, 0);
 
-	// Worker Thread »ı¼º
-	for (int i = 0; i < IOCP_THREAD; ++i)
-	{
-		m_workerThreads.emplace_back(std::thread(&IOCP::WorkerThread, this));
-	}
+    m_isRunning = true;
 
-	for (auto& worker : m_workerThreads)
-	{
-		worker.detach();
-	}
+    // Worker Thread ìƒì„± (detach í•˜ì—¬ ì‹¤í–‰)
+    for (int i = 0; i < IOCP_THREAD; ++i)
+    {
+        m_workerThreads.emplace_back(&IOCP::WorkerThread, this);
+    }
 
-	CreateIoCompletionPort((HANDLE)listenSocket, m_hIocp, 0, 0);
+    // HeartBeat Thread ìƒì„±
+    m_heartBeatThread = std::thread(&IOCP::HeartBeatThread, this);
 
-	m_nextSessionID = 1;
+    // AcceptExë¥¼ ìœ„í•œ ì´ˆê¸° ìš”ì²­ ë“±ë¡
+    for (int i = 0; i < 10; ++i)
+    {
+        auto ioData = std::make_shared<IOData>();
+        ioData->AcquireBufferFromPool(LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE);
 
-	std::shared_ptr<IOData> ioData = std::make_shared<IOData>();
-	ioData->packetMemory = std::shared_ptr<char[]>(new char[LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16]);
-	ioData->wsaBuf.buf = ioData->packetMemory.get();
-	ioData->wsaBuf.len = LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE + 16;
+        {
+            std::lock_guard<std::mutex> lock(m_ioMapMutex);
+            m_ioDataMap[&ioData->overlapped] = ioData;
+        }
 
-	{
-		std::lock_guard<std::mutex> lock(m_ioMapMutex);
-		m_ioDataMap[&ioData->overlapped] = ioData;
-	}
-
-	bool postResult = PostAccept(ioData);
-
-	if (!postResult)
-	{
-		return;
-	}
-
-	m_heartBeatThread = std::thread(&IOCP::HeartBeatThread, this);
+        if (!PostAccept(ioData))
+        {
+            MainServer::Instance().Log("ì´ˆê¸° PostAccept ì‹¤íŒ¨");
+        }
+    }
 }
 
 void IOCP::Finalize()
 {
-	for (auto& thread : m_workerThreads)
-		PostQueuedCompletionStatus(m_hIocp, 0, 0, nullptr);
+    m_isRunning = false;
 
-	for (auto& thread : m_workerThreads)
-		thread.join();
+    // ëª¨ë“  Worker Threadì— ì¢…ë£Œ ì‹ í˜¸ ì „ì†¡
+    for (size_t i = 0; i < m_workerThreads.size(); ++i)
+    {
+        PostQueuedCompletionStatus(m_hIocp, 0, 0, nullptr);
+    }
 
-	if (m_hIocp)
-		CloseHandle(m_hIocp);
+    // Worker Thread ì¢…ë£Œ ëŒ€ê¸°
+    for (auto& thread : m_workerThreads)
+    {
+        if (thread.joinable())
+            thread.join();
+    }
 
-	for (auto& session : m_sessions)
-	{
-		closesocket(session.second->socket);
-	}
+    // HeartBeat Thread ì¢…ë£Œ ëŒ€ê¸°
+    if (m_heartBeatThread.joinable())
+        m_heartBeatThread.join();
 
-	closesocket(m_serverSession->socket);
+    // ì„¸ì…˜ ì •ë¦¬
+    {
+        std::lock_guard<std::mutex> lock(m_sessionMutex);
+        for (auto& [id, session] : m_sessions)
+        {
+            if (session->socket != INVALID_SOCKET)
+            {
+                closesocket(session->socket);
+            }
+        }
+        m_sessions.clear();
+    }
+
+    // IO ë°ì´í„° ë§µ ì •ë¦¬
+    {
+        std::lock_guard<std::mutex> lock(m_ioMapMutex);
+        m_ioDataMap.clear();
+    }
+
+    // ì„œë²„ ì†Œì¼“ ì •ë¦¬
+    if (m_serverSession && m_serverSession->socket != INVALID_SOCKET)
+    {
+        closesocket(m_serverSession->socket);
+    }
+
+    if (m_hIocp)
+    {
+        CloseHandle(m_hIocp);
+        m_hIocp = nullptr;
+    }
+
+    // ë²„í¼í’€ ì •ë¦¬
+    ShutdownBufferPools();
+
+    WSACleanup();
+
+    MainServer::Instance().Log("ì„œë²„ ì¢…ë£Œ ì™„ë£Œ");
 }
 
-void IOCP::SendPacket(unsigned int sessionID, std::shared_ptr<char[]> packet, int byteLength)
+void IOCP::SendPacket(unsigned int sessionID, const char* packet, int byteLength)
 {
-	auto it = m_sessions.find(sessionID);
-	if (it == m_sessions.end())
-	{
-		MainServer::Instance().Log("¼¼¼Ç ID¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù: " + std::to_string(sessionID));
-		EraseSession(sessionID);
-		MainServer::Instance().DisconnectUserBySessionID(sessionID);
-		return;
-	}
+    std::shared_ptr<Session> session;
 
-	std::shared_ptr<IOData> writeIoData = std::make_shared<IOData>();
-	memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
-	std::shared_ptr<char[]> buffer(new char[byteLength]);
-	memcpy(buffer.get(), packet.get(), byteLength);
-	writeIoData->packetMemory = buffer;
-	writeIoData->wsaBuf.buf = writeIoData->GetBuffer();
-	writeIoData->wsaBuf.len = byteLength;
-	writeIoData->mode = WRITE;
+    {
+        std::lock_guard<std::mutex> lock(m_sessionMutex);
+        auto it = m_sessions.find(sessionID);
+        if (it == m_sessions.end())
+        {
+            return;
+        }
+        session = it->second;
+    }
 
-	{
-		std::lock_guard<std::mutex> lock(m_ioMapMutex);
-		m_ioDataMap[&writeIoData->overlapped] = writeIoData;
-	}
+    if (!session || session->socket == INVALID_SOCKET)
+    {
+            MainServer::Instance().Log("ì„¸ì…˜ ì†Œì¼“ì´ ìœ íš¨í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤: " + std::to_string(sessionID));
+        EraseSession(sessionID);
+        MainServer::Instance().DisconnectUserBySessionID(sessionID);
+        return;
+    }
 
-	DWORD bytesSent = 0;
+    auto writeIoData = std::make_shared<IOData>();
+    writeIoData->AcquireBufferFromPool(byteLength);
+    memcpy(writeIoData->GetBuffer(), packet, byteLength);
+    writeIoData->wsaBuf.len = byteLength;
+    writeIoData->mode = IO_WRITE;
+    writeIoData->sessionID = sessionID;
 
-	if (it->second->socket == INVALID_SOCKET)
-	{
-		MainServer::Instance().Log("¼¼¼Ç ¼ÒÄÏÀÌ À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù: " + std::to_string(sessionID));
-		MainServer::Instance().DisconnectUserBySessionID(sessionID);
-		EraseSession(sessionID);
-		return;
-	}
+    {
+        std::lock_guard<std::mutex> lock(m_ioMapMutex);
+        m_ioDataMap[&writeIoData->overlapped] = writeIoData;
+    }
 
-	int result = WSASend(it->second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
-	if (result == SOCKET_ERROR)
-	{
-		int error = WSAGetLastError();
-		if (error != WSA_IO_PENDING)
-		{
-			MainServer::Instance().Log("WSASend ½ÇÆĞ: " + std::to_string(error));
-			EraseSession(sessionID);
-			MainServer::Instance().DisconnectUserBySessionID(sessionID);
-			return;
-		}
-	}
-	return;
+    DWORD bytesSent = 0;
+    int result = WSASend(session->socket, &writeIoData->wsaBuf, 1, &bytesSent, 0, &writeIoData->overlapped, NULL);
+
+    if (result == SOCKET_ERROR)
+    {
+        int error = WSAGetLastError();
+        if (error != WSA_IO_PENDING)
+        {
+            MainServer::Instance().Log("WSASend ì‹¤íŒ¨: " + std::to_string(error));
+
+            {
+                std::lock_guard<std::mutex> lock(m_ioMapMutex);
+                m_ioDataMap.erase(&writeIoData->overlapped);
+            }
+
+            EraseSession(sessionID);
+            MainServer::Instance().DisconnectUserBySessionID(sessionID);
+        }
+    }
 }
 
-void IOCP::BroadCast(std::shared_ptr<char[]> packet, int byteLength)
+void IOCP::BroadCast(const char* packet, int byteLength)
 {
-	for (auto& session : m_sessions)
-	{
-		std::shared_ptr<IOData> writeIoData = std::make_shared<IOData>();
-		memset(&writeIoData->overlapped, 0, sizeof(OVERLAPPED));
-		writeIoData->packetMemory = packet;
-		writeIoData->wsaBuf.buf = writeIoData->GetBuffer();
-		writeIoData->wsaBuf.len = byteLength;
-		writeIoData->mode = WRITE;
+    std::vector<std::pair<unsigned int, std::shared_ptr<Session>>> sessionsCopy;
 
-		{
-			std::lock_guard<std::mutex> lock(m_ioMapMutex);
-			m_ioDataMap[&writeIoData->overlapped] = writeIoData;
-		}
+    {
+        std::lock_guard<std::mutex> lock(m_sessionMutex);
+        for (auto& [id, session] : m_sessions)
+        {
+            sessionsCopy.emplace_back(id, session);
+        }
+    }
 
-		DWORD bytesSent;
-		if (session.second->socket != INVALID_SOCKET)
-		{
-			WSASend(session.second->socket, &(writeIoData->wsaBuf), 1, &bytesSent, 0, &(writeIoData->overlapped), NULL);
-		}
-		else
-		{
-			MainServer::Instance().Log("¼¼¼Ç ¼ÒÄÏÀÌ À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù: " + std::to_string(session.first));
-			EraseSession(session.first);
-			MainServer::Instance().DisconnectUserBySessionID(session.first);
-		}
-	}
+    for (auto& [sessionID, session] : sessionsCopy)
+    {
+        if (session && session->socket != INVALID_SOCKET)
+        {
+            SendPacket(sessionID, packet, byteLength);
+        }
+    }
 }
 
 void IOCP::UpdateHeartBeatTime(unsigned int sessionID)
 {
-	std::lock_guard<std::mutex> lock(m_mutex); // ¼¼¼Ç Á¢±Ù µ¿±âÈ­
-	auto it = m_sessions.find(sessionID);
-	if (it != m_sessions.end())
-	{
-		it->second->lastHeartbeatTime = std::chrono::steady_clock::now();
-	}
-	else
-	{
-		MainServer::Instance().Log("¼¼¼Ç ID¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù: " + std::to_string(sessionID));
-		EraseSession(sessionID);
-		MainServer::Instance().DisconnectUserBySessionID(sessionID);
-	}
+    std::lock_guard<std::mutex> lock(m_sessionMutex);
+    auto it = m_sessions.find(sessionID);
+    if (it != m_sessions.end())
+    {
+        it->second->lastHeartbeatTime = std::chrono::steady_clock::now();
+    }
 }
 
 bool IOCP::PostAccept(std::shared_ptr<IOData> ioData)
 {
-	SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+    SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
-	if (clientSocket == INVALID_SOCKET)
-	{
-		MainServer::Instance().Log("Å¬¶óÀÌ¾ğÆ® ¼ÒÄÏ »ı¼º ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-		return false;
-	}
+    if (clientSocket == INVALID_SOCKET)
+    {
+        MainServer::Instance().Log("í´ë¼ì´ì–¸íŠ¸ ì†Œì¼“ ìƒì„± ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+        return false;
+    }
 
-	// Å¬¶óÀÌ¾ğÆ® ÄÁÅØ½ºÆ® ÇÒ´ç ¹× ÃÊ±âÈ­
-	std::shared_ptr<Session> client = std::make_shared<Session>();
-	client->socket = clientSocket;
+    auto client = std::make_shared<Session>();
+    client->socket = clientSocket;
 
-	ioData->session = client;
-	memset(&ioData->overlapped, 0, sizeof(OVERLAPPED));
-	ioData->mode = ACCEPT;
+    ioData->session = client;
+    memset(&ioData->overlapped, 0, sizeof(OVERLAPPED));
+    ioData->mode = IO_ACCEPT;
 
-	DWORD dwBytes;
+    DWORD dwBytes;
+    BOOL result = AcceptEx(m_serverSession->socket, client->socket, ioData->GetBuffer(),
+        0, LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
+        &dwBytes, &ioData->overlapped);
 
-	bool result = AcceptEx(m_serverSession->socket, client->socket, ioData->GetBuffer(),
-		0, LOCAL_ADDR_SIZE, REMOTE_ADDR_SIZE,
-		&dwBytes, &(ioData->overlapped));
+    if (!result)
+    {
+        int error = WSAGetLastError();
+        if (error != WSA_IO_PENDING)
+        {
+            MainServer::Instance().Log("AcceptEx ì‹¤íŒ¨: " + std::to_string(error));
+            closesocket(clientSocket);
+            return false;
+        }
+    }
 
-	if (!result)
-	{
-		int error = WSAGetLastError();
-		if (error != WSA_IO_PENDING)
-		{
-			MainServer::Instance().Log("AcceptEx ½ÇÆĞ: " + std::to_string(error));
-			closesocket(clientSocket);
-
-			return false;
-		}
-	}
-
-	return true;
+    return true;
 }
 
-bool IOCP::PostRecv(std::shared_ptr<Session> session, std::shared_ptr<IOData> ioData)
+bool IOCP::PostRecv(std::shared_ptr<Session> session)
 {
-	memset(&ioData->overlapped, 0, sizeof(OVERLAPPED));
-	ioData->wsaBuf.len = BUFFER_SIZE;
-	ioData->wsaBuf.buf = ioData->GetBuffer();
-	ioData->mode = READ;
+    if (!session || session->socket == INVALID_SOCKET)
+        return false;
 
-	DWORD flags = 0;
-	DWORD bytesReceived;
-	int result = WSARecv(session->socket, &ioData->wsaBuf, 1, &bytesReceived, &flags, &ioData->overlapped, NULL);
+    auto ioData = std::make_shared<IOData>();
+    ioData->AcquireBufferFromPool(BUFFER_SIZE);
+    ioData->mode = IO_READ;
+    ioData->session = session;
+    ioData->sessionID = session->sessionID;
 
-	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
-	{
-		return false;
-	}
-	return true;
+    {
+        std::lock_guard<std::mutex> lock(m_ioMapMutex);
+        m_ioDataMap[&ioData->overlapped] = ioData;
+    }
+
+    DWORD flags = 0;
+    DWORD bytesReceived = 0;
+    int result = WSARecv(session->socket, &ioData->wsaBuf, 1, &bytesReceived, &flags, &ioData->overlapped, NULL);
+
+    if (result == SOCKET_ERROR)
+    {
+        int error = WSAGetLastError();
+        if (error != WSA_IO_PENDING)
+        {
+            std::lock_guard<std::mutex> lock(m_ioMapMutex);
+            m_ioDataMap.erase(&ioData->overlapped);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void IOCP::ProcessReceivedData(std::shared_ptr<Session> session, int bytesTransferred)
+{
+    if (!session || !session->recvBuffer)
+        return;
+
+    // ìˆ˜ì‹  ë²„í¼ì—ì„œ ë°›ì€ ë°ì´í„°ë¥¼ ë§ë²„í¼ë¡œ ë³µì‚¬
+    // (ì´ì „ ë°ì´í„°ëŠ” IODataì˜ ë²„í¼ì—ì„œ ë°›ìŒ - WorkerThreadì—ì„œ ì‹¤ì œ ì—¬ê¸°ë¡œ ì²˜ë¦¬)
+
+    // ì™„ì „í•œ íŒ¨í‚·ì„ ë°›ì•˜ìœ¼ë©´ ì²˜ë¦¬
+    char packetBuffer[RECV_BUFFER_SIZE];
+    int packetLen = 0;
+
+    while (session->recvBuffer->ReadPacket(packetBuffer, packetLen))
+    {
+        // íŒ¨í‚· í¬ê¸° ìœ íš¨ì„± ê²€ì‚¬
+        if (packetLen < sizeof(PacketBase) || packetLen > RECV_BUFFER_SIZE)
+        {
+            MainServer::Instance().Log("ì˜ëª»ëœ íŒ¨í‚· í¬ê¸°: " + std::to_string(packetLen));
+            continue;
+        }
+
+        // MainServerë¡œ íŒ¨í‚· ì „ë‹¬
+        MainServer::Instance().PushData(session->sessionID, packetBuffer, packetLen);
+    }
 }
 
 void IOCP::EraseSession(unsigned int sessionID)
 {
-	{
-		std::lock_guard<std::mutex> lock(m_ioMapMutex);
-		for (auto it = m_ioDataMap.begin(); it != m_ioDataMap.end();)
-		{
-			if (it->second->sessionID == sessionID)
-				it = m_ioDataMap.erase(it);
-			else
-				++it;
-		}
-	}
+    // IO ë°ì´í„° ë§µì—ì„œ í•´ë‹¹ ì„¸ì…˜ ë°ì´í„°ë¥¼ ì‚­ì œ
+    {
+        std::lock_guard<std::mutex> lock(m_ioMapMutex);
+        for (auto it = m_ioDataMap.begin(); it != m_ioDataMap.end();)
+        {
+            if (it->second->sessionID == sessionID)
+                it = m_ioDataMap.erase(it);
+            else
+                ++it;
+        }
+    }
 
-	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		auto it = m_sessions.find(sessionID);
-		if (it != m_sessions.end())
-		{
-			closesocket(it->second->socket);
-			m_sessions.erase(it);
-		}
-	}
+    // ì„¸ì…˜ ë§µì—ì„œ ì‚­ì œ
+    {
+        std::lock_guard<std::mutex> lock(m_sessionMutex);
+        auto it = m_sessions.find(sessionID);
+        if (it != m_sessions.end())
+        {
+            if (it->second->socket != INVALID_SOCKET)
+            {
+                closesocket(it->second->socket);
+                it->second->socket = INVALID_SOCKET;
+            }
+            m_sessions.erase(it);
+        }
+    }
 }
 
 unsigned int IOCP::GenerateSessionID()
 {
-	/*std::lock_guard<std::mutex> lock(m_mutex);
-	std::cout << "Before check: empty = " << m_availableSessionIDs.empty() << std::endl;
-	if (!m_availableSessionIDs.empty())
-	{
-		unsigned int reusedID = m_availableSessionIDs.front();
-		m_availableSessionIDs.pop();
-		return reusedID;
-	}*/
-	return m_nextSessionID++;
+    return m_nextSessionID.fetch_add(1);
 }
 
 void IOCP::HeartBeatThread()
 {
-	while (true)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(HEARTBEAT_INTERVAL_MS));
+    while (m_isRunning)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(HEARTBEAT_INTERVAL_MS));
 
-		auto now = std::chrono::steady_clock::now();
-		std::vector<unsigned int> toErase;
+        if (!m_isRunning)
+            break;
 
-		{
-			std::lock_guard<std::mutex> lock(m_mutex);
+        auto now = std::chrono::steady_clock::now();
+        std::vector<unsigned int> toErase;
 
-			for (const auto& [sessionID, session] : m_sessions)
-			{
-				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - session->lastHeartbeatTime);
-				if (duration.count() > TIMEOUT_MS)
-				{
-					toErase.push_back(sessionID); // »èÁ¦ ¿¹¾à
-					continue;
-				}
+        {
+            std::lock_guard<std::mutex> lock(m_sessionMutex);
 
-				SendHeartBeat(sessionID); // ÇÏÆ®ºñÆ® Àü¼Û
-			}
-		}
+            for (const auto& [sessionID, session] : m_sessions)
+            {
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - session->lastHeartbeatTime);
+                if (duration.count() > TIMEOUT_MS)
+                {
+                    toErase.push_back(sessionID);
+                }
+            }
+        }
 
-		for (auto sessionID : toErase)
-		{
-			EraseSession(sessionID);
-			MainServer::Instance().Log("¼¼¼Ç Å¸ÀÓ¾Æ¿ô: " + std::to_string(sessionID));
-			MainServer::Instance().DisconnectUserBySessionID(sessionID);
-		}
-	}
+        // íƒ€ì„ì•„ì›ƒëœ ì„¸ì…˜ ì •ë¦¬ ë° í•˜íŠ¸ë¹„íŠ¸ ì „ì†¡
+        for (auto sessionID : toErase)
+        {
+            MainServer::Instance().Log("íƒ€ì„ì•„ì›ƒìœ¼ë¡œ ì—°ê²° ì¢…ë£Œ: " + std::to_string(sessionID));
+            EraseSession(sessionID);
+            MainServer::Instance().DisconnectUserBySessionID(sessionID);
+        }
+
+        // í•˜íŠ¸ë¹„íŠ¸ ì „ì†¡
+        std::vector<unsigned int> activeSessionIDs;
+        {
+            std::lock_guard<std::mutex> lock(m_sessionMutex);
+            for (const auto& [sessionID, session] : m_sessions)
+            {
+                activeSessionIDs.push_back(sessionID);
+            }
+        }
+
+        for (auto sessionID : activeSessionIDs)
+        {
+            SendHeartBeat(sessionID);
+        }
+    }
 }
 
 void IOCP::SendHeartBeat(unsigned int sessionID)
 {
-	int packetSize = sizeof(PacketBase);
+    int packetSize = sizeof(PacketBase);
 
-	// ÆĞÅ¶ ¸Ş¸ğ¸® ÇÒ´ç
-	std::shared_ptr<char[]> buffer(new char[packetSize]);
+    PooledBuffer buffer(packetSize);
+    PacketBase* packet = reinterpret_cast<PacketBase*>(buffer.Get());
+    packet->PacketSize = packetSize;
+    packet->PacID = PacketID::S2CHeartBeat;
 
-	// ÆĞÅ¶ »ı¼º
-	PacketBase* packet = reinterpret_cast<PacketBase*>(buffer.get());
-	packet->PacketSize = packetSize;
-	packet->PacID = PacketID::S2CHeartBeat;
-
-	// ÆĞÅ¶ Àü¼Û
-	SendPacket(sessionID, buffer, packetSize);
+    SendPacket(sessionID, buffer.Get(), packetSize);
 }
 
 void IOCP::WorkerThread()
 {
-	DWORD bytesTransferred;
-	Session* session = nullptr;
-	OVERLAPPED* overlapped = nullptr;
+    DWORD bytesTransferred;
+    ULONG_PTR completionKey;
+    OVERLAPPED* overlapped = nullptr;
 
-	while (true)
-	{
-		BOOL success = GetQueuedCompletionStatus(
-			m_hIocp,
-			&bytesTransferred,
-			(PULONG_PTR)&session,
-			&overlapped,
-			INFINITE
-		);
+    while (m_isRunning)
+    {
+        BOOL success = GetQueuedCompletionStatus(
+            m_hIocp,
+            &bytesTransferred,
+            &completionKey,
+            &overlapped,
+            INFINITE
+        );
 
-		std::shared_ptr<IOData> ioData = nullptr;
-		{
-			std::lock_guard<std::mutex> lock(m_ioMapMutex);
-			auto it = m_ioDataMap.find(overlapped);
-			if (it != m_ioDataMap.end()) 
-			{
-				ioData = it->second;
-				m_ioDataMap.erase(it);
-			}
-		}
+        // ì¢…ë£Œ ì‹ í˜¸ í™•ì¸
+        if (!m_isRunning && overlapped == nullptr)
+            break;
 
-		if (!success || (bytesTransferred == 0 && (!ioData || ioData->mode != ACCEPT)))
-		{
-			MainServer::Instance().Log("Å¬¶óÀÌ¾ğÆ® ¿¬°á Á¾·á: " + std::to_string(session ? session->sessionID : 0));
-			if (session) 
-			{
-				EraseSession(session->sessionID);
-				MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
-			}
-			continue;
-		}
+        std::shared_ptr<IOData> ioData = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(m_ioMapMutex);
+            auto it = m_ioDataMap.find(overlapped);
+            if (it != m_ioDataMap.end())
+            {
+                ioData = it->second;
+                m_ioDataMap.erase(it);
+            }
+        }
 
-		if (!ioData) 
-		{
-			MainServer::Instance().Log("¿À·ù: À¯È¿ÇÏÁö ¾ÊÀº IOData (overlapped = nullptr)");
-			continue;
-		}
+        if (!ioData)
+        {
+            if (overlapped != nullptr)
+            {
+                MainServer::Instance().Log("ì˜¤ë¥˜: ìœ íš¨í•˜ì§€ ì•Šì€ IOData");
+            }
+            continue;
+        }
 
-		switch (ioData->mode)
-		{
-		case ACCEPT:
-		{
-			auto& curSession = ioData->session;
-			unsigned int sessionID = GenerateSessionID();
-			curSession->sessionID = sessionID;
-			curSession->lastHeartbeatTime = std::chrono::steady_clock::now();
+        // ì—°ê²° ì¢…ë£Œ ë˜ëŠ” ì˜¤ë¥˜ ì²˜ë¦¬
+        if (!success || (bytesTransferred == 0 && ioData->mode != IO_ACCEPT))
+        {
+            if (ioData->session)
+            {
+                unsigned int sessionID = ioData->session->sessionID;
+                if (sessionID != 0)
+                {
+                    MainServer::Instance().Log("í´ë¼ì´ì–¸íŠ¸ ì—°ê²° ì¢…ë£Œ: " + std::to_string(sessionID));
+                    EraseSession(sessionID);
+                    MainServer::Instance().DisconnectUserBySessionID(sessionID);
+                }
+            }
+            continue;
+        }
 
-			setsockopt(curSession->socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-				(char*)&m_serverSession->socket, sizeof(m_serverSession->socket));
+        switch (ioData->mode)
+        {
+        case IO_ACCEPT:
+        {
+            auto& curSession = ioData->session;
+            unsigned int sessionID = GenerateSessionID();
+            curSession->sessionID = sessionID;
+            curSession->lastHeartbeatTime = std::chrono::steady_clock::now();
 
-			// Å¬¶óÀÌ¾ğÆ® IP È®ÀÎ
-			SOCKADDR_IN clientAddr;
-			int addrLen = sizeof(clientAddr);
-			getpeername(curSession->socket, (SOCKADDR*)&clientAddr, &addrLen);
+            setsockopt(curSession->socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
+                (char*)&m_serverSession->socket, sizeof(m_serverSession->socket));
 
-			char szIP[64] = { 0 };
-			if (!InetNtopA(AF_INET, &clientAddr.sin_addr, szIP, sizeof(szIP))) 
-			{
-				MainServer::Instance().Log("IP º¯È¯ ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-				closesocket(curSession->socket);
-				break;
-			}
+            // í´ë¼ì´ì–¸íŠ¸ IP í™•ì¸
+            SOCKADDR_IN clientAddr;
+            int addrLen = sizeof(clientAddr);
+            getpeername(curSession->socket, (SOCKADDR*)&clientAddr, &addrLen);
 
-			MainServer::Instance().Log("Å¬¶óÀÌ¾ğÆ® Á¢¼Ó: " + std::string(szIP) + " (¼¼¼Ç ID: " + std::to_string(sessionID) + ")");
+            char szIP[64] = { 0 };
+            if (InetNtopA(AF_INET, &clientAddr.sin_addr, szIP, sizeof(szIP)))
+            {
+                MainServer::Instance().Log("í´ë¼ì´ì–¸íŠ¸ ì ‘ì†: " + std::string(szIP) + " (ì„¸ì…˜ ID: " + std::to_string(sessionID) + ")");
+            }
 
-			CreateIoCompletionPort((HANDLE)curSession->socket, m_hIocp, (ULONG_PTR)curSession.get(), 0);
-			m_sessions[sessionID] = curSession;
+            // IOCPì— ì†Œì¼“ ì—°ê²°
+            CreateIoCompletionPort((HANDLE)curSession->socket, m_hIocp, (ULONG_PTR)curSession.get(), 0);
 
-			auto recvIoData = std::make_shared<IOData>();
-			recvIoData->packetMemory = std::shared_ptr<char[]>(new char[BUFFER_SIZE]);
-			recvIoData->session = curSession;
+            // ì„¸ì…˜ ë§µì— ì¶”ê°€
+            {
+                std::lock_guard<std::mutex> lock(m_sessionMutex);
+                m_sessions[sessionID] = curSession;
+            }
 
-			if (PostRecv(curSession, recvIoData)) 
-			{
-				std::lock_guard<std::mutex> lock(m_ioMapMutex);
-				m_ioDataMap[&recvIoData->overlapped] = recvIoData;
-			}
-			else 
-			{
-				MainServer::Instance().Log("PostRecv ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-				EraseSession(sessionID);
-				MainServer::Instance().DisconnectUserBySessionID(sessionID);
-				break;
-			}
+            // ìˆ˜ì‹  ëŒ€ê¸° ì‹œì‘
+            if (!PostRecv(curSession))
+            {
+                MainServer::Instance().Log("PostRecv ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+                EraseSession(sessionID);
+                MainServer::Instance().DisconnectUserBySessionID(sessionID);
+            }
 
-			// ´ÙÀ½ Å¬¶óÀÌ¾ğÆ® ¼ö½Å ´ë±â
-			if (!PostAccept(ioData)) 
-			{
-				MainServer::Instance().Log("PostAccept ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-			}
-			else 
-			{
-				std::lock_guard<std::mutex> lock(m_ioMapMutex);
-				m_ioDataMap[&ioData->overlapped] = ioData;
-			}
-			break;
-		}
+            // ë‹¤ìŒ Accept ëŒ€ê¸°
+            ioData->session = nullptr;
+            ioData->AcquireBufferFromPool(LOCAL_ADDR_SIZE + REMOTE_ADDR_SIZE);
 
-		case READ:
-		{
-			MainServer::Instance().PushData(session->sessionID, ioData->GetBuffer());
+            if (PostAccept(ioData))
+            {
+                std::lock_guard<std::mutex> lock(m_ioMapMutex);
+                m_ioDataMap[&ioData->overlapped] = ioData;
+            }
+            else
+            {
+                MainServer::Instance().Log("PostAccept ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+            }
+            break;
+        }
 
-			if (PostRecv(ioData->session, ioData)) 
-			{
-				std::lock_guard<std::mutex> lock(m_ioMapMutex);
-				m_ioDataMap[&ioData->overlapped] = ioData;
-			}
-			else 
-			{
-				MainServer::Instance().Log("PostRecv ½ÇÆĞ: " + std::to_string(WSAGetLastError()));
-				EraseSession(session->sessionID);
-				MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
-			}
-			break;
-		}
+        case IO_READ:
+        {
+            auto session = ioData->session;
+            if (session && session->recvBuffer)
+            {
+                // ë°›ì€ ë°ì´í„°ë¥¼ ë§ë²„í¼ë¡œ ë³µì‚¬
+                if (!session->recvBuffer->Write(ioData->GetBuffer(), bytesTransferred))
+                {
+                    MainServer::Instance().Log("ë§ë²„í¼ ì˜¤ë²„í”Œë¡œìš°: " + std::to_string(session->sessionID));
+                    EraseSession(session->sessionID);
+                    MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
+                    break;
+                }
 
-		case WRITE:
-		{
-			// Àü¼Û ¿Ï·á ÈÄ Ã³¸®
-			break;
-		}
+                // ì™„ì „í•œ íŒ¨í‚· ì²˜ë¦¬
+                ProcessReceivedData(session, bytesTransferred);
 
-		default:
-			MainServer::Instance().Log("¿À·ù: ¾Ë ¼ö ¾ø´Â IOData ¸ğµå");
-			break;
-		}
-	}
+                // ë‹¤ìŒ ìˆ˜ì‹  ëŒ€ê¸°
+                if (!PostRecv(session))
+                {
+                    MainServer::Instance().Log("PostRecv ì‹¤íŒ¨: " + std::to_string(WSAGetLastError()));
+                    EraseSession(session->sessionID);
+                    MainServer::Instance().DisconnectUserBySessionID(session->sessionID);
+                }
+            }
+            break;
+        }
+
+        case IO_WRITE:
+        {
+            // ì „ì†¡ ì™„ë£Œ - IODataê°€ ìë™ìœ¼ë¡œ ì •ë¦¬ë¨ (shared_ptr)
+            break;
+        }
+
+        default:
+            MainServer::Instance().Log("ì˜¤ë¥˜: ì•Œìˆ˜ì—†ëŠ” IOData ëª¨ë“œ: " + std::to_string(ioData->mode));
+            break;
+        }
+    }
 }

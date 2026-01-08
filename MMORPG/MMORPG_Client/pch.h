@@ -7,10 +7,13 @@
 #ifndef PCH_H
 #define PCH_H
 
+#include <vld.h>
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 // 여기에 미리 컴파일하려는 헤더 추가
+
 #include "framework.h"
 
 #include <winsock2.h>
@@ -25,6 +28,5 @@
 #include <cmath>
 #include <unordered_map>
 #include <deque>
-
 
 #endif //PCH_H

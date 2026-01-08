@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Server (Build First)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/x64/Debug/Server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/x64/Debug",
+            "environment": [],
+            "console": "externalTerminal",
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug Server",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/x64/Debug/Server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/x64/Debug",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "Run Server (No Debug)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/x64/Debug/Server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/x64/Debug",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "Run Server (Absolute Path)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "C:/Projects/IOCP/MMORPG/Server/x64/Debug/Server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "C:/Projects/IOCP/MMORPG/Server/x64/Debug",
+            "environment": [],
+            "console": "externalTerminal"
+        }
+    ]
+}

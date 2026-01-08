@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "AuthPacketHandler.h"
 #include "MainServer.h"
 
@@ -79,7 +80,7 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 			{
 				delete res;
 
-				// ·Î±×ÀÎ ½ÇÆĞ ÆĞÅ¶ Àü¼Û
+				// ë¡œê·¸ì¸ ì‹¤íŒ¨ ì‹œ íŒ¨í‚· ì „ì†¡
 				int packetSize = sizeof(PacketBase) + sizeof(S2CLoginAckPacket);
 				std::shared_ptr<char[]> buffer(new char[packetSize]);
 				PacketBase* newPac = reinterpret_cast<PacketBase*>(buffer.get());
@@ -90,7 +91,7 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 				return;
 			}
 
-			// ·Î±×ÀÎ ¼º°ø Ã³¸®
+			// ë¡œê·¸ì¸ ì„±ê³µ ì²˜ë¦¬
 			ack.Result = 0;
 			ack.UserID = res->getInt("UserID");
 			std::string name = res->getString("Username");
@@ -103,7 +104,7 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 
 			delete res;
 
-			// Ä³¸¯ÅÍ ¸ñ·Ï Äõ¸®
+			// ìºë¦­í„° ì •ë³´ ì¡°íšŒ
 			std::string charQuery =
 				"SELECT CharID, Name, Level, Exp, Gender FROM Characters WHERE UserID = " + std::to_string(ack.UserID) + ";";
 
@@ -132,10 +133,10 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 
 					delete charRes;
 
-					// Ä³¸¯ÅÍ ¼ö ¹İ¿µ
+					// ìºë¦­í„° ìˆ˜ ì„¤ì •
 					ack.CharacterCount = static_cast<uint16_t>(characters.size());
 
-					// ÀüÃ¼ ÆĞÅ¶ Å©±â = PacketBase + LoginAck + characterInfo * N
+					// íŒ¨í‚· í¬ê¸° ê³„ì‚° = PacketBase + LoginAck + characterInfo * N
 					int packetSize = sizeof(PacketBase)
 						+ sizeof(S2CLoginAckPacket)
 						+ sizeof(S2CCharacterInfo) * characters.size();
@@ -148,11 +149,11 @@ void AuthPacketHandler::HandleLogin(unsigned int sessionID, PacketBase* pac)
 
 					char* writePtr = newPac->Body;
 
-					// 1. ·Î±×ÀÎ ÀÀ´ä ÆĞÅ¶
+					// 1. ë¡œê·¸ì¸ ì‘ë‹µ ë³µì‚¬
 					memcpy(writePtr, &ack, sizeof(S2CLoginAckPacket));
 					writePtr += sizeof(S2CLoginAckPacket);
 
-					// 2. Ä³¸¯ÅÍ Á¤º¸µé ºÙÀÌ±â
+					// 2. ìºë¦­í„° ëª©ë¡ ë³µì‚¬
 					if (!characters.empty())
 						memcpy(writePtr, characters.data(), sizeof(S2CCharacterInfo) * characters.size());
 
